@@ -18,6 +18,10 @@ import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 public class VentanaPrincipal extends Application {
@@ -26,7 +30,7 @@ public class VentanaPrincipal extends Application {
     private ProgressBar barraSinPool, barraConPool;
     private Label lblEstadoSin, lblEstadoCon, lblResumen;
     private GraficoBarras graficaFinal;
-    private GraficoProgreso graficoProgresoSin, graficoProgresoCon;
+    private GraficoTorta graficoTortaSin, graficoTortaCon;
     private TextArea areaLogs;
     private Button btnSimular, btnFreno;
     private ConfiguracionEntorno config;
@@ -47,8 +51,8 @@ public class VentanaPrincipal extends Application {
         lblResumen = new Label();
         graficaFinal = new GraficoBarras();
         graficaFinal.setVisible(false);
-        graficoProgresoSin = new GraficoProgreso("Progreso Sin Pool");
-        graficoProgresoCon = new GraficoProgreso("Progreso Con Pool");
+        graficoTortaSin = new GraficoTorta("Sin Pool");
+        graficoTortaCon = new GraficoTorta("Con Pool");
         areaLogs = new TextArea();
         areaLogs.setEditable(false);
         areaLogs.setPrefHeight(150);
@@ -128,7 +132,7 @@ public class VentanaPrincipal extends Application {
             }
             """;
 
-        Scene scene = new Scene(crearLayout(), 900, 750);
+        Scene scene = new Scene(crearLayout(), 1100, 850);
         scene.getStylesheets().add("data:text/css," + css.replace("\n", "").replace(" ", " "));
         stage.setScene(scene);
         stage.setTitle("ConexionesPool - Simulación");
@@ -151,14 +155,14 @@ public class VentanaPrincipal extends Application {
         HBox botonesBox = new HBox(20, btnSimular, btnFreno);
         botonesBox.setAlignment(Pos.CENTER);
 
-        // Gráficas de progreso una al lado de la otra, más grandes
-        graficoProgresoSin.setPrefWidth(400);
-        graficoProgresoCon.setPrefWidth(400);
-        HBox progresoBox = new HBox(20, graficoProgresoSin, graficoProgresoCon);
-        progresoBox.setAlignment(Pos.CENTER);
-        progresoBox.setPadding(new Insets(5, 0, 5, 0));
+        // Gráficas de torta más grandes y con título
+        graficoTortaSin.setPrefSize(300, 300);
+        graficoTortaCon.setPrefSize(300, 300);
+        HBox tortasBox = new HBox(40, graficoTortaSin, graficoTortaCon);
+        tortasBox.setAlignment(Pos.CENTER);
+        tortasBox.setPadding(new Insets(10, 0, 10, 0));
 
-        // Cuadros de Sin pool y Con pool, más anchos
+        // Cuadros de Sin pool y Con pool
         VBox sinPoolBox = new VBox(5,
                 new Label("📊 Sin pool de conexiones"),
                 barraSinPool,
@@ -194,7 +198,7 @@ public class VentanaPrincipal extends Application {
                 titulo,
                 peticionesBox,
                 botonesBox,
-                progresoBox,
+                tortasBox,
                 poolsBox,
                 lblResumen,
                 graficaFinalBox,
@@ -216,15 +220,22 @@ public class VentanaPrincipal extends Application {
         lblEstadoCon.setText("⏳ Con pool: en progreso...");
         areaLogs.clear();
 
-        // Limpiar gráficas de progreso
-        graficoProgresoSin.limpiar();
-        graficoProgresoCon.limpiar();
+        // Limpiar gráficas de torta
+        graficoTortaSin.limpiar();
+        graficoTortaCon.limpiar();
 
         int numPeticiones;
         try {
             numPeticiones = Integer.parseInt(txtPeticiones.getText());
         } catch (NumberFormatException ex) {
             lblResumen.setText("Número inválido");
+            btnSimular.setDisable(false);
+            return;
+        }
+
+        // Validar rango de peticiones (mínimo 10000, máximo 50000)
+        if (numPeticiones < 10000 || numPeticiones > 50000) {
+            lblResumen.setText("El número de peticiones debe estar entre 10000 y 50000");
             btnSimular.setDisable(false);
             return;
         }
@@ -251,87 +262,112 @@ public class VentanaPrincipal extends Application {
         PoolConexiones pool = new PoolConexiones(url, user, pass, tamPool, timeout);
         AdministradorPool admin = new AdministradorPool(pool);
 
+        // Usar un ExecutorService para manejar muchos hilos sin saturar
+        ExecutorService executor = Executors.newFixedThreadPool(200);
+        CountDownLatch latch = new CountDownLatch(2); // Dos simulaciones
+
+        // Lanzar ambas simulaciones simultáneamente
+        executor.submit(() -> {
+            try {
+                ejecutarSimulacionRaw(numPeticiones, reintentosMax, proveedorQueries, freno, logger, url, user, pass, latch);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
+        executor.submit(() -> {
+            try {
+                ejecutarSimulacionPool(numPeticiones, reintentosMax, proveedorQueries, freno, logger, admin, latch);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
+        // Hilo que espera a que ambas terminen y luego muestra resultados
         new Thread(() -> {
             try {
-                // --- Sin pool ---
-                ContadorEstadisticas contadorSin = new ContadorEstadisticas();
-                Thread hiloContadorSin = new Thread(contadorSin);
-                hiloContadorSin.start();
+                latch.await(); // Espera a que ambas terminen
+                executor.shutdown();
+                executor.awaitTermination(1, TimeUnit.MINUTES);
 
-                SimuladorRaw simuladorRaw = new SimuladorRaw(
-                        numPeticiones, reintentosMax, proveedorQueries,
-                        freno, logger, url, user, pass
-                );
+                // Obtener los contadores de las simulaciones
+                // Nota: En este diseño, los contadores se manejan dentro de los métodos ejecutarSimulacionX
+                // y ya actualizaron las UI. Aquí podríamos mostrar la gráfica final si se desea.
+                // Por ahora, la gráfica final se mostraría si la activamos.
 
-                simuladorRaw.ejecutar(contadorSin, progreso -> {
-                    Platform.runLater(() -> {
-                        barraSinPool.setProgress(progreso);
-                        graficoProgresoSin.agregarPunto(progreso);
-                    });
-                });
-
-                contadorSin.detener();
-                hiloContadorSin.join();
-
-                int exitosasSin = contadorSin.getExitosas();
-                int fallidasSin = contadorSin.getFallidas();
-                double pctSin = contadorSin.getPorcentajeExito();
-
-                Platform.runLater(() -> lblEstadoSin.setText(
-                        String.format("✅ Sin pool: %d exitosas, %d fallidas (%.2f%%)",
-                                exitosasSin, fallidasSin, pctSin)));
-
-                // --- Con pool ---
-                ContadorEstadisticas contadorCon = new ContadorEstadisticas();
-                Thread hiloContadorCon = new Thread(contadorCon);
-                hiloContadorCon.start();
-
-                SimuladorPool simuladorPool = new SimuladorPool(
-                        numPeticiones, reintentosMax, proveedorQueries,
-                        freno, logger, admin
-                );
-
-                simuladorPool.ejecutar(contadorCon, progreso -> {
-                    Platform.runLater(() -> {
-                        barraConPool.setProgress(progreso);
-                        graficoProgresoCon.agregarPunto(progreso);
-                    });
-                });
-
-                contadorCon.detener();
-                hiloContadorCon.join();
-
-                int exitosasCon = contadorCon.getExitosas();
-                int fallidasCon = contadorCon.getFallidas();
-                double pctCon = contadorCon.getPorcentajeExito();
-
-                Platform.runLater(() -> {
-                    lblEstadoCon.setText(
-                            String.format("⚡ Con pool: %d exitosas, %d fallidas (%.2f%%)",
-                                    exitosasCon, fallidasCon, pctCon));
-                    graficaFinal.mostrarResultados(exitosasSin, fallidasSin, exitosasCon, fallidasCon);
-                    graficaFinal.setVisible(true);
-
-                    String mejor = (pctSin > pctCon) ? "SIN POOL" :
-                            (pctCon > pctSin) ? "CON POOL" : "EMPATE";
-                    lblResumen.setText("🏆 Mejor rendimiento: " + mejor);
-                });
-
-            } catch (Exception e) {
-                Platform.runLater(() -> lblResumen.setText("Error: " + e.getMessage()));
+            } catch (InterruptedException e) {
                 e.printStackTrace();
-            } finally {
-                try {
-                    admin.cerrarPool();
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-                Platform.runLater(() -> {
-                    btnSimular.setDisable(false);
-                    btnFreno.setDisable(true);
-                    btnFreno.setStyle("");
-                });
             }
         }).start();
+    }
+
+    private void ejecutarSimulacionRaw(int numPeticiones, int reintentosMax, Supplier<String> proveedorQueries,
+                                       Freno freno, LoggerMuestras logger, String url, String user, String pass,
+                                       CountDownLatch latch) {
+        ContadorEstadisticas contador = new ContadorEstadisticas();
+        Thread hiloContador = new Thread(contador);
+        hiloContador.start();
+
+        SimuladorRaw simulador = new SimuladorRaw(
+                numPeticiones, reintentosMax, proveedorQueries,
+                freno, logger, url, user, pass
+        );
+
+        simulador.ejecutar(contador, progreso -> {
+            Platform.runLater(() -> {
+                barraSinPool.setProgress(progreso);
+            });
+        });
+
+        contador.detener();
+        try { hiloContador.join(); } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        int exitosas = contador.getExitosas();
+        int fallidas = contador.getFallidas();
+        double pct = contador.getPorcentajeExito();
+
+        Platform.runLater(() -> {
+            lblEstadoSin.setText(String.format("✅ Sin pool: %d exitosas, %d fallidas (%.2f%%)", exitosas, fallidas, pct));
+            graficoTortaSin.actualizar(exitosas, fallidas);
+        });
+
+        latch.countDown();
+    }
+
+    private void ejecutarSimulacionPool(int numPeticiones, int reintentosMax, Supplier<String> proveedorQueries,
+                                        Freno freno, LoggerMuestras logger, AdministradorPool admin,
+                                        CountDownLatch latch) {
+        ContadorEstadisticas contador = new ContadorEstadisticas();
+        Thread hiloContador = new Thread(contador);
+        hiloContador.start();
+
+        SimuladorPool simulador = new SimuladorPool(
+                numPeticiones, reintentosMax, proveedorQueries,
+                freno, logger, admin
+        );
+
+        simulador.ejecutar(contador, progreso -> {
+            Platform.runLater(() -> {
+                barraConPool.setProgress(progreso);
+            });
+        });
+
+        contador.detener();
+        try { hiloContador.join(); } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        int exitosas = contador.getExitosas();
+        int fallidas = contador.getFallidas();
+        double pct = contador.getPorcentajeExito();
+
+        Platform.runLater(() -> {
+            lblEstadoCon.setText(String.format("⚡ Con pool: %d exitosas, %d fallidas (%.2f%%)", exitosas, fallidas, pct));
+            graficoTortaCon.actualizar(exitosas, fallidas);
+        });
+
+        latch.countDown();
     }
 }
