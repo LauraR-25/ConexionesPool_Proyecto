@@ -10,6 +10,7 @@ import conexionespool.util.Freno;
 import conexionespool.util.LoggerMuestras;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -24,7 +25,9 @@ public class VentanaPrincipal extends Application {
     private TextField txtPeticiones;
     private ProgressBar barraSinPool, barraConPool;
     private Label lblEstadoSin, lblEstadoCon, lblResumen;
-    private GraficoBarras grafica;
+    private GraficoBarras graficaFinal;
+    private GraficoProgreso graficoProgresoSin, graficoProgresoCon;
+    private TextArea areaLogs;
     private Button btnSimular, btnFreno;
     private ConfiguracionEntorno config;
     private Freno freno;
@@ -33,7 +36,7 @@ public class VentanaPrincipal extends Application {
     public void start(Stage stage) {
         config = new ConfiguracionEntorno(".env");
 
-        // Crear componentes
+        // Componentes
         txtPeticiones = new TextField(String.valueOf(config.obtenerEntero("PETICIONES_POR_DEFECTO")));
         btnSimular = new Button("🚀 Iniciar simulación");
         btnFreno = new Button("🛑 Freno de emergencia");
@@ -42,79 +45,86 @@ public class VentanaPrincipal extends Application {
         lblEstadoSin = new Label("⏳ Sin pool: esperando...");
         lblEstadoCon = new Label("⏳ Con pool: esperando...");
         lblResumen = new Label();
-        grafica = new GraficoBarras();
-        grafica.setVisible(false);
+        graficaFinal = new GraficoBarras();
+        graficaFinal.setVisible(false);
+        graficoProgresoSin = new GraficoProgreso("Progreso Sin Pool");
+        graficoProgresoCon = new GraficoProgreso("Progreso Con Pool");
+        areaLogs = new TextArea();
+        areaLogs.setEditable(false);
+        areaLogs.setPrefHeight(150);
+        areaLogs.setStyle("-fx-control-inner-background: #1e1e2f; -fx-text-fill: #d4b5ff; -fx-font-family: monospace;");
 
-        // Aplicar estilos CSS
+        // CSS embebido
         String css = """
             .root {
-                -fx-background-color: linear-gradient(to bottom, #1a1a2e, #16213e);
+                -fx-background-color: linear-gradient(to bottom, #2b1a3a, #3c2a4d);
                 -fx-font-family: 'Segoe UI', 'Arial', sans-serif;
-                -fx-padding: 30;
+                -fx-padding: 20;
             }
             .label {
-                -fx-text-fill: #e0e0e0;
-                -fx-font-size: 14px;
+                -fx-text-fill: #f0e6ff;
+                -fx-font-size: 13px;
                 -fx-font-weight: bold;
             }
             .title-label {
                 -fx-font-size: 28px;
-                -fx-text-fill: #a88ff0;
+                -fx-text-fill: #ffb3d9;
                 -fx-font-weight: bold;
-                -fx-effect: dropshadow(gaussian, #a88ff0, 10, 0.3, 0, 2);
+                -fx-effect: dropshadow(gaussian, #c77dff, 10, 0.3, 0, 2);
             }
             .text-field {
-                -fx-background-color: #0f0f1f;
+                -fx-background-color: #3a2a4a;
                 -fx-text-fill: #ffffff;
-                -fx-border-color: #a88ff0;
+                -fx-border-color: #d4b5ff;
                 -fx-border-radius: 8;
                 -fx-background-radius: 8;
-                -fx-font-size: 14px;
-                -fx-padding: 8 12;
+                -fx-font-size: 13px;
+                -fx-padding: 6 10;
             }
             .button {
-                -fx-background-color: linear-gradient(to bottom, #a88ff0, #7c3aed);
+                -fx-background-color: linear-gradient(to bottom, #c77dff, #a64dff);
                 -fx-text-fill: #ffffff;
-                -fx-font-size: 14px;
+                -fx-font-size: 13px;
                 -fx-font-weight: bold;
                 -fx-background-radius: 8;
                 -fx-border-radius: 8;
-                -fx-padding: 10 20;
+                -fx-padding: 8 16;
                 -fx-cursor: hand;
-                -fx-effect: dropshadow(gaussian, #a88ff0, 8, 0.2, 0, 2);
+                -fx-effect: dropshadow(gaussian, #c77dff, 8, 0.2, 0, 2);
             }
             .button:hover {
-                -fx-background-color: linear-gradient(to bottom, #b69eff, #a88ff0);
-            }
-            .button:frenado {
-                -fx-background-color: linear-gradient(to bottom, #ff4b4b, #b91c1c);
+                -fx-background-color: linear-gradient(to bottom, #d9a3ff, #c77dff);
             }
             .progress-bar {
-                -fx-accent: #a88ff0;
+                -fx-accent: #ffb3d9;
                 -fx-background-radius: 10;
                 -fx-border-radius: 10;
-                -fx-pref-height: 20;
+                -fx-pref-height: 18;
             }
             .progress-bar .track {
-                -fx-background-color: #0f0f1f;
-            }
-            .status-label {
-                -fx-text-fill: #b0b0b0;
-                -fx-font-size: 13px;
-                -fx-font-style: italic;
-            }
-            .result-label {
-                -fx-text-fill: #a88ff0;
-                -fx-font-size: 16px;
-                -fx-font-weight: bold;
-                -fx-padding: 10 0 0 0;
+                -fx-background-color: #3a2a4a;
             }
             .graph-box {
-                -fx-background-color: #1e1e2f;
+                -fx-background-color: #2a1a38;
                 -fx-border-radius: 15;
                 -fx-background-radius: 15;
-                -fx-padding: 15;
-                -fx-effect: dropshadow(gaussian, #a88ff0, 8, 0.1, 0, 2);
+                -fx-padding: 12;
+                -fx-effect: dropshadow(gaussian, #c77dff, 8, 0.1, 0, 2);
+                -fx-border-color: #d4b5ff;
+                -fx-border-width: 1;
+            }
+            .result-label {
+                -fx-text-fill: #ffb3d9;
+                -fx-font-size: 15px;
+                -fx-font-weight: bold;
+                -fx-padding: 8 0 0 0;
+            }
+            .log-area {
+                -fx-background-color: #1e1e2f;
+                -fx-text-fill: #d4b5ff;
+                -fx-border-color: #d4b5ff;
+                -fx-border-radius: 8;
+                -fx-background-radius: 8;
             }
             """;
 
@@ -141,12 +151,21 @@ public class VentanaPrincipal extends Application {
         HBox botonesBox = new HBox(20, btnSimular, btnFreno);
         botonesBox.setAlignment(Pos.CENTER);
 
+        // Gráficas de progreso una al lado de la otra, más grandes
+        graficoProgresoSin.setPrefWidth(400);
+        graficoProgresoCon.setPrefWidth(400);
+        HBox progresoBox = new HBox(20, graficoProgresoSin, graficoProgresoCon);
+        progresoBox.setAlignment(Pos.CENTER);
+        progresoBox.setPadding(new Insets(5, 0, 5, 0));
+
+        // Cuadros de Sin pool y Con pool, más anchos
         VBox sinPoolBox = new VBox(5,
                 new Label("📊 Sin pool de conexiones"),
                 barraSinPool,
                 lblEstadoSin
         );
         sinPoolBox.getStyleClass().add("graph-box");
+        sinPoolBox.setPrefWidth(400);
 
         VBox conPoolBox = new VBox(5,
                 new Label("⚡ Con pool de conexiones"),
@@ -154,22 +173,32 @@ public class VentanaPrincipal extends Application {
                 lblEstadoCon
         );
         conPoolBox.getStyleClass().add("graph-box");
+        conPoolBox.setPrefWidth(400);
+
+        HBox poolsBox = new HBox(20, sinPoolBox, conPoolBox);
+        poolsBox.setAlignment(Pos.CENTER);
+
+        // Gráfica final de barras
+        VBox graficaFinalBox = new VBox(graficaFinal);
+        graficaFinalBox.getStyleClass().add("graph-box");
+        graficaFinalBox.setVisible(false);
+        graficaFinalBox.managedProperty().bind(graficaFinalBox.visibleProperty());
+
+        // Área de logs
+        VBox logBox = new VBox(5, new Label("📋 Logs de simulación:"), areaLogs);
+        logBox.getStyleClass().add("graph-box");
 
         lblResumen.getStyleClass().add("result-label");
 
-        VBox graficaBox = new VBox(grafica);
-        graficaBox.getStyleClass().add("graph-box");
-        graficaBox.setVisible(false);
-        graficaBox.managedProperty().bind(graficaBox.visibleProperty());
-
-        VBox root = new VBox(20,
+        VBox root = new VBox(12,
                 titulo,
                 peticionesBox,
                 botonesBox,
-                sinPoolBox,
-                conPoolBox,
+                progresoBox,
+                poolsBox,
                 lblResumen,
-                graficaBox
+                graficaFinalBox,
+                logBox
         );
         root.setAlignment(Pos.TOP_CENTER);
         root.getStyleClass().add("root");
@@ -179,12 +208,17 @@ public class VentanaPrincipal extends Application {
     private void iniciarSimulacion() {
         btnSimular.setDisable(true);
         btnFreno.setDisable(false);
-        grafica.setVisible(false);
+        graficaFinal.setVisible(false);
         lblResumen.setText("");
         barraSinPool.setProgress(0);
         barraConPool.setProgress(0);
         lblEstadoSin.setText("⏳ Sin pool: en progreso...");
         lblEstadoCon.setText("⏳ Con pool: en progreso...");
+        areaLogs.clear();
+
+        // Limpiar gráficas de progreso
+        graficoProgresoSin.limpiar();
+        graficoProgresoCon.limpiar();
 
         int numPeticiones;
         try {
@@ -206,7 +240,13 @@ public class VentanaPrincipal extends Application {
         Supplier<String> proveedorQueries = () -> queriesArray[new Random().nextInt(queriesArray.length)];
 
         freno = new Freno();
-        LoggerMuestras logger = new LoggerMuestras();
+        LoggerMuestras logger = new LoggerMuestras() {
+            @Override
+            public void log(String mensaje) {
+                Platform.runLater(() -> areaLogs.appendText(mensaje + "\n"));
+                super.log(mensaje);
+            }
+        };
 
         PoolConexiones pool = new PoolConexiones(url, user, pass, tamPool, timeout);
         AdministradorPool admin = new AdministradorPool(pool);
@@ -223,8 +263,12 @@ public class VentanaPrincipal extends Application {
                         freno, logger, url, user, pass
                 );
 
-                simuladorRaw.ejecutar(contadorSin, progreso ->
-                        Platform.runLater(() -> barraSinPool.setProgress(progreso)));
+                simuladorRaw.ejecutar(contadorSin, progreso -> {
+                    Platform.runLater(() -> {
+                        barraSinPool.setProgress(progreso);
+                        graficoProgresoSin.agregarPunto(progreso);
+                    });
+                });
 
                 contadorSin.detener();
                 hiloContadorSin.join();
@@ -247,8 +291,12 @@ public class VentanaPrincipal extends Application {
                         freno, logger, admin
                 );
 
-                simuladorPool.ejecutar(contadorCon, progreso ->
-                        Platform.runLater(() -> barraConPool.setProgress(progreso)));
+                simuladorPool.ejecutar(contadorCon, progreso -> {
+                    Platform.runLater(() -> {
+                        barraConPool.setProgress(progreso);
+                        graficoProgresoCon.agregarPunto(progreso);
+                    });
+                });
 
                 contadorCon.detener();
                 hiloContadorCon.join();
@@ -261,8 +309,8 @@ public class VentanaPrincipal extends Application {
                     lblEstadoCon.setText(
                             String.format("⚡ Con pool: %d exitosas, %d fallidas (%.2f%%)",
                                     exitosasCon, fallidasCon, pctCon));
-                    grafica.mostrarResultados(exitosasSin, fallidasSin, exitosasCon, fallidasCon);
-                    grafica.setVisible(true);
+                    graficaFinal.mostrarResultados(exitosasSin, fallidasSin, exitosasCon, fallidasCon);
+                    graficaFinal.setVisible(true);
 
                     String mejor = (pctSin > pctCon) ? "SIN POOL" :
                             (pctCon > pctSin) ? "CON POOL" : "EMPATE";
@@ -281,7 +329,7 @@ public class VentanaPrincipal extends Application {
                 Platform.runLater(() -> {
                     btnSimular.setDisable(false);
                     btnFreno.setDisable(true);
-                    btnFreno.setStyle(""); // restaurar estilo
+                    btnFreno.setStyle("");
                 });
             }
         }).start();
