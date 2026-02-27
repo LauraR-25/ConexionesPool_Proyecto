@@ -18,10 +18,6 @@ import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
 import java.util.Random;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 public class VentanaPrincipal extends Application {
@@ -155,7 +151,7 @@ public class VentanaPrincipal extends Application {
         HBox botonesBox = new HBox(20, btnSimular, btnFreno);
         botonesBox.setAlignment(Pos.CENTER);
 
-        // Gráficas de torta más grandes y con título
+        // Gráficas de torta
         graficoTortaSin.setPrefSize(300, 300);
         graficoTortaCon.setPrefSize(300, 300);
         HBox tortasBox = new HBox(40, graficoTortaSin, graficoTortaCon);
@@ -182,7 +178,7 @@ public class VentanaPrincipal extends Application {
         HBox poolsBox = new HBox(20, sinPoolBox, conPoolBox);
         poolsBox.setAlignment(Pos.CENTER);
 
-        // Gráfica final de barras
+        // Gráfica final de barras (opcional)
         VBox graficaFinalBox = new VBox(graficaFinal);
         graficaFinalBox.getStyleClass().add("graph-box");
         graficaFinalBox.setVisible(false);
@@ -233,9 +229,9 @@ public class VentanaPrincipal extends Application {
             return;
         }
 
-        // Validar rango de peticiones (mínimo 10000, máximo 50000)
-        if (numPeticiones < 10000 || numPeticiones > 50000) {
-            lblResumen.setText("El número de peticiones debe estar entre 10000 y 50000");
+        // Validar rango de peticiones (mínimo 50, máximo 40000)
+        if (numPeticiones < 50 || numPeticiones > 40000) {
+            lblResumen.setText("El número de peticiones debe estar entre 50 y 40000");
             btnSimular.setDisable(false);
             return;
         }
@@ -262,39 +258,27 @@ public class VentanaPrincipal extends Application {
         PoolConexiones pool = new PoolConexiones(url, user, pass, tamPool, timeout);
         AdministradorPool admin = new AdministradorPool(pool);
 
-        // Usar un ExecutorService para manejar muchos hilos sin saturar
-        ExecutorService executor = Executors.newFixedThreadPool(200);
-        CountDownLatch latch = new CountDownLatch(2); // Dos simulaciones
-
-        // Lanzar ambas simulaciones simultáneamente
-        executor.submit(() -> {
-            try {
-                ejecutarSimulacionRaw(numPeticiones, reintentosMax, proveedorQueries, freno, logger, url, user, pass, latch);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+        // Lanzar ambas simulaciones en hilos separados (paralelo)
+        Thread hiloRaw = new Thread(() -> {
+            ejecutarSimulacionRaw(numPeticiones, reintentosMax, proveedorQueries, freno, logger, url, user, pass);
+        });
+        Thread hiloPool = new Thread(() -> {
+            ejecutarSimulacionPool(numPeticiones, reintentosMax, proveedorQueries, freno, logger, admin);
         });
 
-        executor.submit(() -> {
-            try {
-                ejecutarSimulacionPool(numPeticiones, reintentosMax, proveedorQueries, freno, logger, admin, latch);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
+        hiloRaw.start();
+        hiloPool.start();
 
-        // Hilo que espera a que ambas terminen y luego muestra resultados
+        // Hilo que espera a que terminen y luego habilita botón (opcional)
         new Thread(() -> {
             try {
-                latch.await(); // Espera a que ambas terminen
-                executor.shutdown();
-                executor.awaitTermination(1, TimeUnit.MINUTES);
-
-                // Obtener los contadores de las simulaciones
-                // Nota: En este diseño, los contadores se manejan dentro de los métodos ejecutarSimulacionX
-                // y ya actualizaron las UI. Aquí podríamos mostrar la gráfica final si se desea.
-                // Por ahora, la gráfica final se mostraría si la activamos.
-
+                hiloRaw.join();
+                hiloPool.join();
+                Platform.runLater(() -> {
+                    btnSimular.setDisable(false);
+                    btnFreno.setDisable(true);
+                    btnFreno.setStyle("");
+                });
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -302,8 +286,7 @@ public class VentanaPrincipal extends Application {
     }
 
     private void ejecutarSimulacionRaw(int numPeticiones, int reintentosMax, Supplier<String> proveedorQueries,
-                                       Freno freno, LoggerMuestras logger, String url, String user, String pass,
-                                       CountDownLatch latch) {
+                                       Freno freno, LoggerMuestras logger, String url, String user, String pass) {
         ContadorEstadisticas contador = new ContadorEstadisticas();
         Thread hiloContador = new Thread(contador);
         hiloContador.start();
@@ -332,13 +315,10 @@ public class VentanaPrincipal extends Application {
             lblEstadoSin.setText(String.format("✅ Sin pool: %d exitosas, %d fallidas (%.2f%%)", exitosas, fallidas, pct));
             graficoTortaSin.actualizar(exitosas, fallidas);
         });
-
-        latch.countDown();
     }
 
     private void ejecutarSimulacionPool(int numPeticiones, int reintentosMax, Supplier<String> proveedorQueries,
-                                        Freno freno, LoggerMuestras logger, AdministradorPool admin,
-                                        CountDownLatch latch) {
+                                        Freno freno, LoggerMuestras logger, AdministradorPool admin) {
         ContadorEstadisticas contador = new ContadorEstadisticas();
         Thread hiloContador = new Thread(contador);
         hiloContador.start();
@@ -367,7 +347,5 @@ public class VentanaPrincipal extends Application {
             lblEstadoCon.setText(String.format("⚡ Con pool: %d exitosas, %d fallidas (%.2f%%)", exitosas, fallidas, pct));
             graficoTortaCon.actualizar(exitosas, fallidas);
         });
-
-        latch.countDown();
     }
 }
