@@ -35,7 +35,6 @@ public class VentanaPrincipal extends Application {
     private ConfiguracionEntorno config;
     private Freno freno;
 
-    // Contadores para actualización en tiempo real
     private ContadorEstadisticas contadorSin, contadorCon;
     private Timeline timelineSin, timelineCon;
 
@@ -43,8 +42,7 @@ public class VentanaPrincipal extends Application {
     public void start(Stage stage) {
         config = new ConfiguracionEntorno(".env");
 
-        // Componentes
-        txtPeticiones = new TextField("50"); // Valor por defecto 50
+        txtPeticiones = new TextField("50");
         btnSimularRaw = new Button("🚀 Solo Raw");
         btnSimularPool = new Button("⚡ Solo Pool");
         btnSimularAmbos = new Button("🔁 Ambas simulaciones");
@@ -64,7 +62,6 @@ public class VentanaPrincipal extends Application {
         areaLogs.setPrefHeight(150);
         areaLogs.setStyle("-fx-control-inner-background: #1e1e2f; -fx-text-fill: #d4b5ff; -fx-font-family: monospace;");
 
-        // CSS embebido (tonos morados, rosa y blanco)
         String css = """
             .root {
                 -fx-background-color: linear-gradient(to bottom, #2b1a3a, #3c2a4d);
@@ -165,14 +162,12 @@ public class VentanaPrincipal extends Application {
         HBox botonesBox = new HBox(10, btnSimularRaw, btnSimularPool, btnSimularAmbos, btnFreno);
         botonesBox.setAlignment(Pos.CENTER);
 
-        // Gráficas de torta más grandes
         graficoTortaSin.setPrefSize(300, 300);
         graficoTortaCon.setPrefSize(300, 300);
         HBox tortasBox = new HBox(40, graficoTortaSin, graficoTortaCon);
         tortasBox.setAlignment(Pos.CENTER);
         tortasBox.setPadding(new Insets(10, 0, 10, 0));
 
-        // Cuadros de Sin pool y Con pool
         VBox sinPoolBox = new VBox(5,
                 new Label("📊 Sin pool de conexiones"),
                 barraSinPool,
@@ -192,13 +187,11 @@ public class VentanaPrincipal extends Application {
         HBox poolsBox = new HBox(20, sinPoolBox, conPoolBox);
         poolsBox.setAlignment(Pos.CENTER);
 
-        // Gráfica final de barras (opcional)
         VBox graficaFinalBox = new VBox(graficaFinal);
         graficaFinalBox.getStyleClass().add("graph-box");
         graficaFinalBox.setVisible(false);
         graficaFinalBox.managedProperty().bind(graficaFinalBox.visibleProperty());
 
-        // Área de logs
         VBox logBox = new VBox(5, new Label("📋 Logs de simulación:"), areaLogs);
         logBox.getStyleClass().add("graph-box");
 
@@ -220,7 +213,6 @@ public class VentanaPrincipal extends Application {
     }
 
     private void iniciarSimulacion(TipoSimulacion tipo) {
-        // Deshabilitar botones durante la simulación
         btnSimularRaw.setDisable(true);
         btnSimularPool.setDisable(true);
         btnSimularAmbos.setDisable(true);
@@ -233,7 +225,6 @@ public class VentanaPrincipal extends Application {
         lblEstadoCon.setText("⏳ Con pool: en progreso...");
         areaLogs.clear();
 
-        // Limpiar gráficas de torta
         graficoTortaSin.limpiar();
         graficoTortaCon.limpiar();
 
@@ -246,20 +237,17 @@ public class VentanaPrincipal extends Application {
             return;
         }
 
-        // Validar rango (50 - 40000)
         if (numPeticiones < 50 || numPeticiones > 40000) {
             lblResumen.setText("El número de peticiones debe estar entre 50 y 40000");
             habilitarBotones();
             return;
         }
 
-        // Obtener configuración (valores efectivamente finales)
         final String url = "jdbc:postgresql://" + config.obtener("DB_HOST") + ":"
                 + config.obtener("DB_PORT") + "/" + config.obtener("DB_NAME");
         final String user = config.obtener("DB_USER");
         final String pass = config.obtener("DB_PASSWORD");
         final int tamPool = config.obtenerEntero("POOL_SIZE");
-        final long timeout = config.obtenerLargo("POOL_TIMEOUT");
         final int reintentosMax = config.obtenerEntero("REINTENTOS_MAXIMOS");
         final String[] queriesArray = config.obtenerQueries();
         final Supplier<String> proveedorQueries = () -> queriesArray[new Random().nextInt(queriesArray.length)];
@@ -273,14 +261,12 @@ public class VentanaPrincipal extends Application {
             }
         };
 
-        final PoolConexiones pool = new PoolConexiones(url, user, pass, tamPool, timeout);
+        final PoolConexiones pool = new PoolConexiones(url, user, pass, tamPool);
         final AdministradorPool admin = new AdministradorPool(pool);
 
-        // Inicializar contadores
         contadorSin = null;
         contadorCon = null;
 
-        // Crear timelines para actualización en tiempo real (cada 200 ms)
         timelineSin = new Timeline(new KeyFrame(Duration.millis(200), e -> {
             if (contadorSin != null) {
                 int exitosas = contadorSin.getExitosas();
@@ -299,10 +285,8 @@ public class VentanaPrincipal extends Application {
         }));
         timelineCon.setCycleCount(Timeline.INDEFINITE);
 
-        // Contador de simulaciones activas para saber cuándo terminar
         final int[] simulacionesActivas = {0};
 
-        // Lanzar simulación RAW si corresponde
         if (tipo == TipoSimulacion.RAW || tipo == TipoSimulacion.AMBOS) {
             simulacionesActivas[0]++;
             contadorSin = new ContadorEstadisticas();
@@ -325,13 +309,12 @@ public class VentanaPrincipal extends Application {
                     Thread.currentThread().interrupt();
                 }
 
-                // Actualización final en UI
                 Platform.runLater(() -> {
                     int exitosas = contadorSinFinal.getExitosas();
                     int fallidas = contadorSinFinal.getFallidas();
                     double pct = contadorSinFinal.getPorcentajeExito();
                     lblEstadoSin.setText(String.format("✅ Sin pool: %d exitosas, %d fallidas (%.2f%%)", exitosas, fallidas, pct));
-                    graficoTortaSin.actualizar(exitosas, fallidas); // asegurar último valor
+                    graficoTortaSin.actualizar(exitosas, fallidas);
                 });
 
                 synchronized (simulacionesActivas) {
@@ -348,7 +331,6 @@ public class VentanaPrincipal extends Application {
             hiloRaw.start();
         }
 
-        // Lanzar simulación POOL si corresponde
         if (tipo == TipoSimulacion.POOL || tipo == TipoSimulacion.AMBOS) {
             simulacionesActivas[0]++;
             contadorCon = new ContadorEstadisticas();
@@ -393,7 +375,6 @@ public class VentanaPrincipal extends Application {
             hiloPool.start();
         }
 
-        // Iniciar timelines según corresponda
         if (tipo == TipoSimulacion.RAW || tipo == TipoSimulacion.AMBOS) {
             timelineSin.play();
         }

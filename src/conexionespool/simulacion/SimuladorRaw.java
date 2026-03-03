@@ -2,14 +2,13 @@ package conexionespool.simulacion;
 
 import conexionespool.modelo.ContadorEstadisticas;
 import conexionespool.modelo.Resultado;
+import conexionespool.pool.IPoolConexiones;
 import conexionespool.util.Freno;
 import conexionespool.util.LoggerMuestras;
 
 import java.sql.*;
 import java.util.Random;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -21,6 +20,7 @@ public class SimuladorRaw {
     private final LoggerMuestras logger;
     private final Random random = new Random();
     private final String url, user, pass;
+    private final Semaphore semaforo = new Semaphore(200); // Máximo 200 hilos concurrentes
 
     public SimuladorRaw(int totalMuestras, int reintentosMaximos, Supplier<String> proveedorQuery,
                         Freno freno, LoggerMuestras logger,
@@ -36,20 +36,31 @@ public class SimuladorRaw {
     }
 
     public void ejecutar(ContadorEstadisticas contador, Consumer<Double> actualizadorProgreso) {
-        ExecutorService executor = Executors.newFixedThreadPool(200); // Máximo 200 hilos concurrentes
+        Thread[] hilos = new Thread[totalMuestras];
         for (int i = 0; i < totalMuestras; i++) {
             final int id = i + 1;
             final String query = proveedorQuery.get();
-            executor.submit(() -> {
-                if (freno.estaActivado()) return;
-                ejecutarMuestra(id, query, contador, actualizadorProgreso);
+            hilos[i] = new Thread(() -> {
+                try {
+                    semaforo.acquire(); // Limitar concurrencia
+                    if (freno.estaActivado()) return;
+                    ejecutarMuestra(id, query, contador, actualizadorProgreso);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    semaforo.release();
+                }
             });
+            hilos[i].start();
         }
-        executor.shutdown();
-        try {
-            executor.awaitTermination(1, TimeUnit.HOURS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+
+        // Esperar a que terminen
+        for (Thread h : hilos) {
+            try {
+                h.join();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 

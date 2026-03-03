@@ -18,19 +18,12 @@ public class GraficoTorta extends StackPane {
         pieChart.setLegendVisible(false);
         pieChart.setAnimated(false);
         pieChart.setStyle("-fx-background-color: transparent;");
-        pieChart.setPrefSize(350, 350); // Más grande
+        pieChart.setPrefSize(300, 300);
 
         lblPorcentaje = new Label("0%");
-        lblPorcentaje.setFont(Font.font("Segoe UI", FontWeight.BOLD, 28));
+        lblPorcentaje.setFont(Font.font("Segoe UI", FontWeight.BOLD, 24));
         lblPorcentaje.setTextFill(Color.web("#ffb3d9"));
         lblPorcentaje.setStyle("-fx-effect: dropshadow(gaussian, #c77dff, 5, 0.2, 0, 0);");
-
-        // Añadir un segmento dummy para que el gráfico se vea incluso sin datos
-        PieChart.Data dummy = new PieChart.Data("", 1);
-        pieChart.getData().add(dummy);
-        dummy.nodeProperty().addListener((obs, oldNode, newNode) -> {
-            if (newNode != null) newNode.setStyle("-fx-pie-color: #3a2a4a;"); // Color gris oscuro
-        });
 
         this.getChildren().addAll(pieChart, lblPorcentaje);
         this.setAlignment(Pos.CENTER);
@@ -39,8 +32,9 @@ public class GraficoTorta extends StackPane {
     public void actualizar(int exitosas, int fallidas) {
         pieChart.getData().clear();
         int total = exitosas + fallidas;
+
         if (total == 0) {
-            // Si no hay datos, mostrar un segmento gris
+            // Si no hay datos, mostrar un segmento gris (como estaba antes)
             PieChart.Data dummy = new PieChart.Data("", 1);
             pieChart.getData().add(dummy);
             dummy.nodeProperty().addListener((obs, oldNode, newNode) -> {
@@ -49,26 +43,28 @@ public class GraficoTorta extends StackPane {
             lblPorcentaje.setText("0%");
             return;
         }
-        double pctExito = (exitosas * 100.0) / total;
 
+        // --- CORRECCIÓN: Crear SIEMPRE ambas porciones ---
         PieChart.Data sliceExito = new PieChart.Data("Éxito", exitosas);
         PieChart.Data sliceFallo = new PieChart.Data("Fallo", fallidas);
         pieChart.getData().addAll(sliceExito, sliceFallo);
 
-        // Colores personalizados
+        // Calcular y mostrar el porcentaje de ÉXITO en el centro
+        double pctExito = (exitosas * 100.0) / total;
+        lblPorcentaje.setText(String.format("%.1f%%", pctExito));
+
+        // Asignar colores ALTAMENTE CONTRASTANTES para que se vean bien
         sliceExito.nodeProperty().addListener((obs, oldNode, newNode) -> {
-            if (newNode != null) newNode.setStyle("-fx-pie-color: #4CAF50;");
+            if (newNode != null) newNode.setStyle("-fx-pie-color: #4CAF50;"); // Verde vibrante
         });
         sliceFallo.nodeProperty().addListener((obs, oldNode, newNode) -> {
-            if (newNode != null) newNode.setStyle("-fx-pie-color: #F44336;");
+            if (newNode != null) newNode.setStyle("-fx-pie-color: #F44336;"); // Rojo vibrante
         });
-
-        lblPorcentaje.setText(String.format("%.1f%%", pctExito));
     }
 
     public void limpiar() {
-        // Restablecer al estado inicial con un segmento gris
         pieChart.getData().clear();
+        // Estado inicial con segmento gris
         PieChart.Data dummy = new PieChart.Data("", 1);
         pieChart.getData().add(dummy);
         dummy.nodeProperty().addListener((obs, oldNode, newNode) -> {

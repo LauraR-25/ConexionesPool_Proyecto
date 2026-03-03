@@ -3,117 +3,81 @@ package conexionespool.pool;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
+import java.util.List;
 
 public class PoolConexiones implements IPoolConexiones {
-    private final BlockingQueue<Connection> disponibles;
-    private final AtomicInteger creadas = new AtomicInteger(0);
+    private final List<Connection> disponibles;
+    private final List<Connection> enUso;
     private final int maxConexiones;
     private final String url;
     private final String usuario;
     private final String password;
-    private final long timeoutMs;
-    private final AtomicInteger totalCreadas = new AtomicInteger(0);
+    private int totalCreadas = 0;
 
-    public PoolConexiones(String url, String usuario, String password, int maxConexiones, long timeoutMs) {
+    public PoolConexiones(String url, String usuario, String password, int maxConexiones) {
         this.url = url;
         this.usuario = usuario;
         this.password = password;
         this.maxConexiones = maxConexiones;
-        this.timeoutMs = timeoutMs;
-        this.disponibles = new LinkedBlockingQueue<>();
-        // Crear una conexión inicial para calentar (opcional)
-        try {
-            disponibles.add(crearNuevaConexion());
-        } catch (SQLException e) {
-            // No pasa nada, se crearán bajo demanda
-        }
+        this.disponibles = new ArrayList<>();
+        this.enUso = new ArrayList<>();
     }
 
     private Connection crearNuevaConexion() throws SQLException {
         Connection conn = DriverManager.getConnection(url, usuario, password);
-        creadas.incrementAndGet();
-        totalCreadas.incrementAndGet();
+        totalCreadas++;
         return conn;
     }
 
-    private boolean esValida(Connection conn) {
-        try {
-            return conn.isValid(2);
-        } catch (SQLException e) {
-            return false;
-        }
-    }
-
-    private void cerrarConexion(Connection conn) {
-        try {
-            conn.close();
-        } catch (SQLException ignored) {}
-        creadas.decrementAndGet();
-    }
-
     @Override
-    public Connection obtener() throws SQLException, InterruptedException {
-        Connection conn = disponibles.poll();
-        if (conn != null) {
-            if (esValida(conn)) {
-                return conn;
-            } else {
-                cerrarConexion(conn);
-                return obtenerNuevaOEsperar();
-            }
+    public synchronized Connection obtener() throws SQLException, InterruptedException {
+        while (disponibles.isEmpty() && enUso.size() >= maxConexiones) {
+            // Esperar hasta que haya una conexión disponible
+            wait();
         }
-        return obtenerNuevaOEsperar();
-    }
-
-    private Connection obtenerNuevaOEsperar() throws SQLException, InterruptedException {
-        if (creadas.get() < maxConexiones) {
-            return crearNuevaConexion();
+        Connection conn;
+        if (!disponibles.isEmpty()) {
+            conn = disponibles.remove(disponibles.size() - 1);
         } else {
-            Connection conn = disponibles.poll(timeoutMs, TimeUnit.MILLISECONDS);
-            if (conn == null) {
-                throw new SQLException("Tiempo de espera agotado (" + timeoutMs + " ms)");
-            }
-            if (esValida(conn)) {
-                return conn;
-            } else {
-                cerrarConexion(conn);
-                return obtenerNuevaOEsperar(); // reintento
-            }
+            conn = crearNuevaConexion();
+        }
+        enUso.add(conn);
+        return conn;
+    }
+
+    @Override
+    public synchronized void liberar(Connection conexion) {
+        if (conexion != null && enUso.remove(conexion)) {
+            disponibles.add(conexion);
+            notifyAll(); // Notificar a los hilos que esperan
         }
     }
 
     @Override
-    public void liberar(Connection conexion) {
-        if (conexion != null) {
-            disponibles.offer(conexion);
-        }
-    }
-
-    @Override
-    public void cerrarTodo() throws SQLException {
+    public synchronized void cerrarTodo() throws SQLException {
         for (Connection conn : disponibles) {
             conn.close();
         }
+        for (Connection conn : enUso) {
+            conn.close();
+        }
         disponibles.clear();
-        creadas.set(0);
+        enUso.clear();
     }
 
     @Override
-    public int getConexionesActivas() {
-        return creadas.get() - disponibles.size();
+    public synchronized int getConexionesActivas() {
+        return enUso.size();
     }
 
     @Override
-    public int getConexionesDisponibles() {
+    public synchronized int getConexionesDisponibles() {
         return disponibles.size();
     }
 
     @Override
-    public int getTotalCreadas() {
-        return totalCreadas.get();
+    public synchronized int getTotalCreadas() {
+        return totalCreadas;
     }
 }
