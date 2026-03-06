@@ -42,7 +42,8 @@ public class VentanaPrincipal extends Application {
     public void start(Stage stage) {
         config = new ConfiguracionEntorno(".env");
 
-        txtPeticiones = new TextField("50");
+        // Componentes
+        txtPeticiones = new TextField(String.valueOf(config.obtenerEntero("PETICIONES_POR_DEFECTO")));
         btnSimularRaw = new Button("🚀 Solo Raw");
         btnSimularPool = new Button("⚡ Solo Pool");
         btnSimularAmbos = new Button("🔁 Ambas simulaciones");
@@ -162,12 +163,14 @@ public class VentanaPrincipal extends Application {
         HBox botonesBox = new HBox(10, btnSimularRaw, btnSimularPool, btnSimularAmbos, btnFreno);
         botonesBox.setAlignment(Pos.CENTER);
 
+        // Gráficas de torta
         graficoTortaSin.setPrefSize(300, 300);
         graficoTortaCon.setPrefSize(300, 300);
         HBox tortasBox = new HBox(40, graficoTortaSin, graficoTortaCon);
         tortasBox.setAlignment(Pos.CENTER);
         tortasBox.setPadding(new Insets(10, 0, 10, 0));
 
+        // Cuadros de Sin pool y Con pool
         VBox sinPoolBox = new VBox(5,
                 new Label("📊 Sin pool de conexiones"),
                 barraSinPool,
@@ -187,11 +190,13 @@ public class VentanaPrincipal extends Application {
         HBox poolsBox = new HBox(20, sinPoolBox, conPoolBox);
         poolsBox.setAlignment(Pos.CENTER);
 
+        // Gráfica final de barras (opcional)
         VBox graficaFinalBox = new VBox(graficaFinal);
         graficaFinalBox.getStyleClass().add("graph-box");
         graficaFinalBox.setVisible(false);
         graficaFinalBox.managedProperty().bind(graficaFinalBox.visibleProperty());
 
+        // Área de logs
         VBox logBox = new VBox(5, new Label("📋 Logs de simulación:"), areaLogs);
         logBox.getStyleClass().add("graph-box");
 
@@ -237,8 +242,8 @@ public class VentanaPrincipal extends Application {
             return;
         }
 
-        if (numPeticiones < 50 || numPeticiones > 40000) {
-            lblResumen.setText("El número de peticiones debe estar entre 50 y 40000");
+        if (numPeticiones < 1 || numPeticiones > 40000) {
+            lblResumen.setText("El número de peticiones debe estar entre 1 y 40000");
             habilitarBotones();
             return;
         }
@@ -267,20 +272,17 @@ public class VentanaPrincipal extends Application {
         contadorSin = null;
         contadorCon = null;
 
+        // Timelines para actualización en tiempo real
         timelineSin = new Timeline(new KeyFrame(Duration.millis(200), e -> {
             if (contadorSin != null) {
-                int exitosas = contadorSin.getExitosas();
-                int fallidas = contadorSin.getFallidas();
-                graficoTortaSin.actualizar(exitosas, fallidas);
+                graficoTortaSin.actualizar(contadorSin.getExitosas(), contadorSin.getFallidas());
             }
         }));
         timelineSin.setCycleCount(Timeline.INDEFINITE);
 
         timelineCon = new Timeline(new KeyFrame(Duration.millis(200), e -> {
             if (contadorCon != null) {
-                int exitosas = contadorCon.getExitosas();
-                int fallidas = contadorCon.getFallidas();
-                graficoTortaCon.actualizar(exitosas, fallidas);
+                graficoTortaCon.actualizar(contadorCon.getExitosas(), contadorCon.getFallidas());
             }
         }));
         timelineCon.setCycleCount(Timeline.INDEFINITE);

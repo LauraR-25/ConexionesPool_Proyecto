@@ -2,7 +2,6 @@ package conexionespool.simulacion;
 
 import conexionespool.modelo.ContadorEstadisticas;
 import conexionespool.modelo.Resultado;
-import conexionespool.pool.IPoolConexiones;
 import conexionespool.util.Freno;
 import conexionespool.util.LoggerMuestras;
 
@@ -20,7 +19,7 @@ public class SimuladorRaw {
     private final LoggerMuestras logger;
     private final Random random = new Random();
     private final String url, user, pass;
-    private final Semaphore semaforo = new Semaphore(200); // Máximo 200 hilos concurrentes
+    private final Semaphore semaforo = new Semaphore(50); // Máximo 50 conexiones simultáneas
 
     public SimuladorRaw(int totalMuestras, int reintentosMaximos, Supplier<String> proveedorQuery,
                         Freno freno, LoggerMuestras logger,
@@ -42,7 +41,7 @@ public class SimuladorRaw {
             final String query = proveedorQuery.get();
             hilos[i] = new Thread(() -> {
                 try {
-                    semaforo.acquire(); // Limitar concurrencia
+                    semaforo.acquire();
                     if (freno.estaActivado()) return;
                     ejecutarMuestra(id, query, contador, actualizadorProgreso);
                 } catch (InterruptedException e) {
@@ -54,7 +53,6 @@ public class SimuladorRaw {
             hilos[i].start();
         }
 
-        // Esperar a que terminen
         for (Thread h : hilos) {
             try {
                 h.join();
@@ -70,10 +68,6 @@ public class SimuladorRaw {
         int reintentos = 0;
 
         while (reintentos <= reintentosMaximos && !exito && !freno.estaActivado()) {
-            if (reintentos > 0) {
-                try { Thread.sleep(random.nextInt(50)); } catch (InterruptedException e) { break; }
-            }
-
             try (Connection conn = DriverManager.getConnection(url, user, pass)) {
                 try (Statement stmt = conn.createStatement()) {
                     ResultSet rs = stmt.executeQuery(query);
