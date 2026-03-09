@@ -30,7 +30,6 @@ public class VentanaPrincipal extends Application {
     private Label lblEstadoSin, lblEstadoCon, lblResumen;
     private GraficoBarras graficaFinal;
     private GraficoTorta graficoTortaSin, graficoTortaCon;
-    private TextArea areaLogs;
     private Button btnSimularRaw, btnSimularPool, btnSimularAmbos, btnFreno;
     private ConfiguracionEntorno config;
     private Freno freno;
@@ -58,11 +57,8 @@ public class VentanaPrincipal extends Application {
         graficaFinal.setVisible(false);
         graficoTortaSin = new GraficoTorta("Sin Pool");
         graficoTortaCon = new GraficoTorta("Con Pool");
-        areaLogs = new TextArea();
-        areaLogs.setEditable(false);
-        areaLogs.setPrefHeight(150);
-        areaLogs.setStyle("-fx-control-inner-background: #1e1e2f; -fx-text-fill: #d4b5ff; -fx-font-family: monospace;");
 
+        // CSS embebido
         String css = """
             .root {
                 -fx-background-color: linear-gradient(to bottom, #2b1a3a, #3c2a4d);
@@ -127,16 +123,9 @@ public class VentanaPrincipal extends Application {
                 -fx-font-weight: bold;
                 -fx-padding: 8 0 0 0;
             }
-            .log-area {
-                -fx-background-color: #1e1e2f;
-                -fx-text-fill: #d4b5ff;
-                -fx-border-color: #d4b5ff;
-                -fx-border-radius: 8;
-                -fx-background-radius: 8;
-            }
             """;
 
-        Scene scene = new Scene(crearLayout(), 1100, 900);
+        Scene scene = new Scene(crearLayout(), 1100, 700); // Reducido altura porque quitamos logs
         scene.getStylesheets().add("data:text/css," + css.replace("\n", "").replace(" ", " "));
         stage.setScene(scene);
         stage.setTitle("ConexionesPool - Simulación");
@@ -170,7 +159,7 @@ public class VentanaPrincipal extends Application {
         tortasBox.setAlignment(Pos.CENTER);
         tortasBox.setPadding(new Insets(10, 0, 10, 0));
 
-        // Cuadros de Sin pool y Con pool
+        // Cuadros de progreso
         VBox sinPoolBox = new VBox(5,
                 new Label("📊 Sin pool de conexiones"),
                 barraSinPool,
@@ -196,10 +185,6 @@ public class VentanaPrincipal extends Application {
         graficaFinalBox.setVisible(false);
         graficaFinalBox.managedProperty().bind(graficaFinalBox.visibleProperty());
 
-        // Área de logs
-        VBox logBox = new VBox(5, new Label("📋 Logs de simulación:"), areaLogs);
-        logBox.getStyleClass().add("graph-box");
-
         lblResumen.getStyleClass().add("result-label");
 
         VBox root = new VBox(12,
@@ -209,8 +194,7 @@ public class VentanaPrincipal extends Application {
                 tortasBox,
                 poolsBox,
                 lblResumen,
-                graficaFinalBox,
-                logBox
+                graficaFinalBox
         );
         root.setAlignment(Pos.TOP_CENTER);
         root.getStyleClass().add("root");
@@ -228,7 +212,6 @@ public class VentanaPrincipal extends Application {
         barraConPool.setProgress(0);
         lblEstadoSin.setText("⏳ Sin pool: en progreso...");
         lblEstadoCon.setText("⏳ Con pool: en progreso...");
-        areaLogs.clear();
 
         graficoTortaSin.limpiar();
         graficoTortaCon.limpiar();
@@ -242,6 +225,7 @@ public class VentanaPrincipal extends Application {
             return;
         }
 
+        // Rango 1 - 40000
         if (numPeticiones < 1 || numPeticiones > 40000) {
             lblResumen.setText("El número de peticiones debe estar entre 1 y 40000");
             habilitarBotones();
@@ -258,13 +242,8 @@ public class VentanaPrincipal extends Application {
         final Supplier<String> proveedorQueries = () -> queriesArray[new Random().nextInt(queriesArray.length)];
 
         freno = new Freno();
-        final LoggerMuestras logger = new LoggerMuestras() {
-            @Override
-            public void log(String mensaje) {
-                Platform.runLater(() -> areaLogs.appendText(mensaje + "\n"));
-                super.log(mensaje);
-            }
-        };
+        // Usamos LoggerMuestras directamente (escribe en archivo, no en interfaz)
+        final LoggerMuestras logger = new LoggerMuestras();
 
         final PoolConexiones pool = new PoolConexiones(url, user, pass, tamPool);
         final AdministradorPool admin = new AdministradorPool(pool);
@@ -377,6 +356,7 @@ public class VentanaPrincipal extends Application {
             hiloPool.start();
         }
 
+        // Iniciar timelines
         if (tipo == TipoSimulacion.RAW || tipo == TipoSimulacion.AMBOS) {
             timelineSin.play();
         }

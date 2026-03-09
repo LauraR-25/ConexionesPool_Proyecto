@@ -7,7 +7,6 @@ import conexionespool.util.LoggerMuestras;
 
 import java.sql.*;
 import java.util.Random;
-import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -19,7 +18,6 @@ public class SimuladorRaw {
     private final LoggerMuestras logger;
     private final Random random = new Random();
     private final String url, user, pass;
-    private final Semaphore semaforo = new Semaphore(50); // Máximo 50 conexiones simultáneas
 
     public SimuladorRaw(int totalMuestras, int reintentosMaximos, Supplier<String> proveedorQuery,
                         Freno freno, LoggerMuestras logger,
@@ -40,15 +38,8 @@ public class SimuladorRaw {
             final int id = i + 1;
             final String query = proveedorQuery.get();
             hilos[i] = new Thread(() -> {
-                try {
-                    semaforo.acquire();
-                    if (freno.estaActivado()) return;
-                    ejecutarMuestra(id, query, contador, actualizadorProgreso);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } finally {
-                    semaforo.release();
-                }
+                if (freno.estaActivado()) return;
+                ejecutarMuestra(id, query, contador, actualizadorProgreso);
             });
             hilos[i].start();
         }
