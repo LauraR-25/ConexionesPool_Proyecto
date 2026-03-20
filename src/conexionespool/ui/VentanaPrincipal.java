@@ -1,14 +1,15 @@
 package conexionespool.ui;
 
+import conexionespool.componentes.DBComponent;
+import conexionespool.componentes.DBComponentConnector;
+import conexionespool.componentes.DBComponentRegistry;
+import conexionespool.componentes.DBException;
+import conexionespool.componentes.DBQueryId;
 import conexionespool.modelo.ContadorEstadisticas;
-import conexionespool.pool.AdministradorPool;
-import conexionespool.pool.PoolConexiones;
-import conexionespool.simulacion.SimuladorPool;
-import conexionespool.simulacion.SimuladorRaw;
+import conexionespool.modelo.Resultado;
+import conexionespool.simulacion.Simulador;
 import conexionespool.util.ConfiguracionEntorno;
-import conexionespool.util.Freno;
-import javafx.animation.KeyFrame;
-import javafx.animation.Timeline;
+import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -16,354 +17,404 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
-import javafx.util.Duration;
 
-import java.util.Random;
-import java.util.function.Supplier;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 public class VentanaPrincipal extends Application {
 
+    private final VBox panelGrafica = new VBox();
+    private final Label statsPool = new Label("0% Éxito");
+    private final ProgressBar progressPool = new ProgressBar(0);
     private TextField txtPeticiones;
-    private ProgressBar barraSinPool, barraConPool;
-    private Label lblEstadoSin, lblEstadoCon, lblResumen;
-    private GraficoBarras graficaFinal;
-    private GraficoTorta graficoTortaSin, graficoTortaCon;
-    private Button btnSimularRaw, btnSimularPool, btnSimularAmbos, btnFreno;
-    private ConfiguracionEntorno config;
-    private Freno freno;
+    private RadioButton rbPostgres;
+    private Label estadoPostgres;
+    private Button btnSimular;
 
-    private ContadorEstadisticas contadorSin, contadorCon;
-    private Timeline timelineSin, timelineCon;
+    // Campos conexión
+    private TextField txtHost, txtPort, txtDb, txtUser;
+    private PasswordField txtPass;
+
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+    private final DBComponentConnector connector = new DBComponentConnector();
+    private final DatabaseType freno = new DatabaseType();
+
+    // Progreso objetivo y suavizado
+    private double targetProgresoPool = 0;
+    private double shownProgresoPool = 0;
+    private AnimationTimer smoothTimer;
+
+    private final Label errorMsg = new Label("");
 
     @Override
     public void start(Stage stage) {
-        config = new ConfiguracionEntorno(".env");
+        // --- Cargar configuración desde .env ---
+        ConfiguracionEntorno config = new ConfiguracionEntorno(".env");
+        String host = config.obtener("DB_HOST");
+        String port = config.obtener("DB_PORT");
+        String db = config.obtener("DB_NAME");
+        String user = config.obtener("DB_USER");
+        String pass = config.obtener("DB_PASSWORD");
 
-        // Componentes
-        txtPeticiones = new TextField(String.valueOf(config.obtenerEntero("PETICIONES_POR_DEFECTO")));
-        btnSimularRaw = new Button("🚀 Solo Raw");
-        btnSimularPool = new Button("⚡ Solo Pool");
-        btnSimularAmbos = new Button("🔁 Ambas simulaciones");
-        btnFreno = new Button("🛑 Freno de emergencia");
+        // --- CONTENEDOR PRINCIPAL ---
+        HBox root = new HBox(25);
+        root.setPadding(new Insets(30));
+        root.setAlignment(Pos.CENTER);
+        root.getStyleClass().add("main-root");
 
-        barraSinPool = new ProgressBar(0);
-        barraConPool = new ProgressBar(0);
-        lblEstadoSin = new Label("⏳ Sin pool: esperando...");
-        lblEstadoCon = new Label("⏳ Con pool: esperando...");
-        lblResumen = new Label();
-        graficaFinal = new GraficoBarras();
-        graficaFinal.setVisible(false);
-        graficoTortaSin = new GraficoTorta("Sin Pool");
-        graficoTortaCon = new GraficoTorta("Con Pool");
+        // ================= COLUMNA IZQUIERDA (Configuración) =================
+        VBox leftCol = new VBox(12);
+        leftCol.setMinWidth(320);
+        leftCol.setPrefWidth(320);
+        leftCol.setMaxWidth(320);
+        HBox.setHgrow(leftCol, Priority.NEVER);
+        leftCol.getStyleClass().add("panel-oscuro");
+        leftCol.setAlignment(Pos.TOP_CENTER);
+        leftCol.setFillWidth(true);
 
-        String css = """
-            .root {
-                -fx-background-color: linear-gradient(to bottom, #2b1a3a, #3c2a4d);
-                -fx-font-family: 'Segoe UI', 'Arial', sans-serif;
-                -fx-padding: 20;
-            }
-            .label {
-                -fx-text-fill: #f0e6ff;
-                -fx-font-size: 13px;
-                -fx-font-weight: bold;
-            }
-            .title-label {
-                -fx-font-size: 28px;
-                -fx-text-fill: #ffb3d9;
-                -fx-font-weight: bold;
-                -fx-effect: dropshadow(gaussian, #c77dff, 10, 0.3, 0, 2);
-            }
-            .text-field {
-                -fx-background-color: #3a2a4a;
-                -fx-text-fill: #ffffff;
-                -fx-border-color: #d4b5ff;
-                -fx-border-radius: 8;
-                -fx-background-radius: 8;
-                -fx-font-size: 13px;
-                -fx-padding: 6 10;
-            }
-            .button {
-                -fx-background-color: linear-gradient(to bottom, #c77dff, #a64dff);
-                -fx-text-fill: #ffffff;
-                -fx-font-size: 13px;
-                -fx-font-weight: bold;
-                -fx-background-radius: 8;
-                -fx-border-radius: 8;
-                -fx-padding: 8 16;
-                -fx-cursor: hand;
-                -fx-effect: dropshadow(gaussian, #c77dff, 8, 0.2, 0, 2);
-            }
-            .button:hover {
-                -fx-background-color: linear-gradient(to bottom, #d9a3ff, #c77dff);
-            }
-            .progress-bar {
-                -fx-accent: #ffb3d9;
-                -fx-background-radius: 10;
-                -fx-border-radius: 10;
-                -fx-pref-height: 18;
-            }
-            .progress-bar .track {
-                -fx-background-color: #3a2a4a;
-            }
-            .graph-box {
-                -fx-background-color: #2a1a38;
-                -fx-border-radius: 15;
-                -fx-background-radius: 15;
-                -fx-padding: 12;
-                -fx-effect: dropshadow(gaussian, #c77dff, 8, 0.1, 0, 2);
-                -fx-border-color: #d4b5ff;
-                -fx-border-width: 1;
-            }
-            .result-label {
-                -fx-text-fill: #ffb3d9;
-                -fx-font-size: 15px;
-                -fx-font-weight: bold;
-                -fx-padding: 8 0 0 0;
-            }
-            """;
+        Label titleLeft = new Label("Configuración de\nParámetros");
+        titleLeft.setFont(Font.font("Segoe UI", FontWeight.BOLD, 20));
+        titleLeft.setTextFill(Color.WHITE);
+        titleLeft.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
 
-        Scene scene = new Scene(crearLayout(), 1100, 800);
-        scene.getStylesheets().add("data:text/css," + css.replace("\n", "").replace(" ", " "));
-        stage.setScene(scene);
+        // Selector DB (solo PostgreSQL)
+        rbPostgres = new RadioButton("PostgreSQL");
+        rbPostgres.setSelected(true);
+        rbPostgres.getStyleClass().add("db-selector");
+        HBox dbContainer = new HBox(12, rbPostgres);
+        dbContainer.setAlignment(Pos.CENTER);
+
+        Label lblDb = new Label("Base de Datos");
+        lblDb.setTextFill(Color.LIGHTGRAY);
+
+        Label lblEstado = new Label("Estado de conexión");
+        lblEstado.setTextFill(Color.LIGHTGRAY);
+
+        estadoPostgres = new Label("PostgreSQL: desconectado");
+        estadoPostgres.setWrapText(true);
+        estadoPostgres.setMaxWidth(Double.MAX_VALUE);
+        estadoPostgres.setTextFill(Color.web("#ff4e8e"));
+
+        // ================= FORMULARIO CONEXIÓN =================
+        Label lblConn = new Label("Datos de conexión");
+        lblConn.setTextFill(Color.LIGHTGRAY);
+
+        txtHost = new TextField(host);
+        txtHost.setPromptText("host (ej. localhost)");
+        txtHost.getStyleClass().add("custom-field");
+
+        txtPort = new TextField(port);
+        txtPort.setPromptText("puerto (ej. 5432)");
+        txtPort.getStyleClass().add("custom-field");
+
+        txtDb = new TextField(db);
+        txtDb.setPromptText("base de datos");
+        txtDb.getStyleClass().add("custom-field");
+
+        txtUser = new TextField(user);
+        txtUser.setPromptText("usuario");
+        txtUser.getStyleClass().add("custom-field");
+
+        txtPass = new PasswordField();
+        txtPass.setText(pass);
+        txtPass.setPromptText("contraseña");
+        txtPass.getStyleClass().add("custom-field");
+
+        Button btnConectar = new Button("⛓ Conectar");
+        btnConectar.getStyleClass().add("btn-iniciar");
+        btnConectar.setMaxWidth(Double.MAX_VALUE);
+
+        Button btnLimpiarConexion = new Button("🧹 Limpiar conexión actual");
+        btnLimpiarConexion.getStyleClass().add("btn-freno");
+        btnLimpiarConexion.setMaxWidth(Double.MAX_VALUE);
+
+        // Control Peticiones
+        Label lblPet = new Label("Número de Peticiones (1-40000)");
+        lblPet.setTextFill(Color.LIGHTGRAY);
+        txtPeticiones = new TextField("10000");
+        txtPeticiones.getStyleClass().add("custom-field");
+
+        // Botones Acción
+        btnSimular = new Button("▶ Iniciar simulación");
+        btnSimular.getStyleClass().add("btn-iniciar");
+        btnSimular.setMaxWidth(Double.MAX_VALUE);
+
+        Button btnFreno = new Button("■ Alto de emergencia");
+        btnFreno.getStyleClass().add("btn-freno");
+        btnFreno.setMaxWidth(Double.MAX_VALUE);
+
+        errorMsg.setTextFill(Color.web("#ff4e8e"));
+        errorMsg.setFont(Font.font("Segoe UI", FontWeight.BOLD, 14));
+        errorMsg.setWrapText(true);
+        errorMsg.setMaxWidth(Double.MAX_VALUE);
+        errorMsg.setAlignment(Pos.CENTER);
+        errorMsg.setPadding(new Insets(8, 0, 0, 0));
+
+        leftCol.getChildren().addAll(
+                titleLeft,
+                dbContainer,
+                lblDb,
+                lblEstado,
+                estadoPostgres,
+                lblConn,
+                txtHost,
+                txtPort,
+                txtDb,
+                txtUser,
+                txtPass,
+                btnConectar,
+                btnLimpiarConexion,
+                lblPet,
+                txtPeticiones,
+                btnSimular,
+                btnFreno,
+                errorMsg
+        );
+
+        ScrollPane leftScroll = new ScrollPane(leftCol);
+        leftScroll.setFitToWidth(true);
+        leftScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        leftScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        leftScroll.setPrefViewportWidth(330);
+        leftScroll.setMinWidth(330);
+        leftScroll.setMaxWidth(330);
+        leftScroll.getStyleClass().add("left-scroll");
+
+        // ================= COLUMNA DERECHA (Métricas) =================
+        VBox rightCol = new VBox(20);
+        HBox.setHgrow(rightCol, Priority.ALWAYS);
+        rightCol.getStyleClass().add("panel-metriz");
+        rightCol.setPadding(new Insets(20));
+
+        Label titleRight = new Label("Métricas de Rendimiento en Tiempo Real");
+        titleRight.setFont(Font.font("Segoe UI", FontWeight.BOLD, 18));
+        titleRight.setTextFill(Color.web("#ffb3d9"));
+
+        // Tarjeta KPI principal (solo pool)
+        HBox kpiBox = new HBox(15);
+        VBox cardPool = crearTarjetaKPI("Simulación con Pool", statsPool, progressPool, "#ffb3d9");
+        HBox.setHgrow(cardPool, Priority.ALWAYS);
+        kpiBox.getChildren().add(cardPool);
+
+        // Área de Gráficas
+        panelGrafica.setAlignment(Pos.CENTER);
+        VBox.setVgrow(panelGrafica, Priority.ALWAYS);
+
+        rightCol.getChildren().addAll(titleRight, kpiBox, panelGrafica);
+        root.getChildren().addAll(leftScroll, rightCol);
+
+        Scene scene = new Scene(root, 1120, 760);
+        aplicarCSS(scene);
+
+        // Conectar automáticamente al inicio con los datos del .env
+        Platform.runLater(() -> conectarDB());
+
         stage.setTitle("ConexionesPool - Simulación");
+        stage.setScene(scene);
         stage.show();
 
-        btnSimularRaw.setOnAction(e -> iniciarSimulacion(TipoSimulacion.RAW));
-        btnSimularPool.setOnAction(e -> iniciarSimulacion(TipoSimulacion.POOL));
-        btnSimularAmbos.setOnAction(e -> iniciarSimulacion(TipoSimulacion.AMBOS));
-        btnFreno.setOnAction(e -> {
-            if (freno != null) freno.activar();
-            btnFreno.setStyle("-fx-background-color: linear-gradient(to bottom, #ff4b4b, #b91c1c);");
+        startSmoothProgressAnimation();
+
+        btnSimular.setOnAction(_ -> ejecutarSimulacion());
+        btnConectar.setOnAction(_ -> conectarDB());
+        btnLimpiarConexion.setOnAction(_ -> limpiarConexionActual());
+        btnFreno.setOnAction(_ -> {
+            freno.activar();
+            statsPool.setText("Freno de emergencia activado");
+        });
+
+        stage.setOnCloseRequest(_ -> {
+            scheduler.shutdownNow();
+            if (smoothTimer != null) smoothTimer.stop();
         });
     }
 
-    private enum TipoSimulacion { RAW, POOL, AMBOS }
-
-    private VBox crearLayout() {
-        Label titulo = new Label("Pool de Conexiones - Simulador");
-        titulo.getStyleClass().add("title-label");
-
-        HBox peticionesBox = new HBox(10, new Label("Número de peticiones:"), txtPeticiones);
-        peticionesBox.setAlignment(Pos.CENTER);
-
-        HBox botonesBox = new HBox(10, btnSimularRaw, btnSimularPool, btnSimularAmbos, btnFreno);
-        botonesBox.setAlignment(Pos.CENTER);
-
-        // Gráficas de torta
-        graficoTortaSin.setPrefSize(300, 300);
-        graficoTortaCon.setPrefSize(300, 300);
-        HBox tortasBox = new HBox(40, graficoTortaSin, graficoTortaCon);
-        tortasBox.setAlignment(Pos.CENTER);
-        tortasBox.setPadding(new Insets(10, 0, 10, 0));
-
-        // Cuadros de progreso
-        VBox sinPoolBox = new VBox(5,
-                new Label("📊 Sin pool de conexiones"),
-                barraSinPool,
-                lblEstadoSin
-        );
-        sinPoolBox.getStyleClass().add("graph-box");
-        sinPoolBox.setPrefWidth(400);
-
-        VBox conPoolBox = new VBox(5,
-                new Label("⚡ Con pool de conexiones"),
-                barraConPool,
-                lblEstadoCon
-        );
-        conPoolBox.getStyleClass().add("graph-box");
-        conPoolBox.setPrefWidth(400);
-
-        HBox poolsBox = new HBox(20, sinPoolBox, conPoolBox);
-        poolsBox.setAlignment(Pos.CENTER);
-
-        // Gráfica final de barras (opcional)
-        VBox graficaFinalBox = new VBox(graficaFinal);
-        graficaFinalBox.getStyleClass().add("graph-box");
-        graficaFinalBox.setVisible(false);
-        graficaFinalBox.managedProperty().bind(graficaFinalBox.visibleProperty());
-
-        lblResumen.getStyleClass().add("result-label");
-
-        VBox root = new VBox(12,
-                titulo,
-                peticionesBox,
-                botonesBox,
-                tortasBox,
-                poolsBox,
-                lblResumen,
-                graficaFinalBox
-        );
-        root.setAlignment(Pos.TOP_CENTER);
-        root.getStyleClass().add("root");
-        return root;
+    private void startSmoothProgressAnimation() {
+        smoothTimer = new AnimationTimer() {
+            private static final double ALPHA = 0.18;
+            @Override
+            public void handle(long now) {
+                shownProgresoPool += (targetProgresoPool - shownProgresoPool) * ALPHA;
+                if (Math.abs(targetProgresoPool - shownProgresoPool) < 0.001) {
+                    shownProgresoPool = targetProgresoPool;
+                }
+                progressPool.setProgress(clamp01(shownProgresoPool));
+            }
+            private double clamp01(double v) {
+                return v < 0 ? 0 : (v > 1 ? 1 : v);
+            }
+        };
+        smoothTimer.start();
     }
 
-    private void iniciarSimulacion(TipoSimulacion tipo) {
-        btnSimularRaw.setDisable(true);
-        btnSimularPool.setDisable(true);
-        btnSimularAmbos.setDisable(true);
-        btnFreno.setDisable(false);
-        graficaFinal.setVisible(false);
-        lblResumen.setText("");
-        barraSinPool.setProgress(0);
-        barraConPool.setProgress(0);
-        lblEstadoSin.setText("⏳ Sin pool: en progreso...");
-        lblEstadoCon.setText("⏳ Con pool: en progreso...");
+    private VBox crearTarjetaKPI(String titulo, Label val, ProgressBar pb, String color) {
+        VBox card = new VBox(8);
+        card.setPadding(new Insets(15));
+        card.setStyle("-fx-background-color: rgba(255,255,255,0.05); -fx-background-radius: 15; -fx-border-color: " + color + "; -fx-border-radius: 15;");
+        card.setMinWidth(220);
+        card.setPrefWidth(260);
+        card.setMaxWidth(420);
 
-        graficoTortaSin.limpiar();
-        graficoTortaCon.limpiar();
+        Label t = new Label(titulo);
+        t.setTextFill(Color.LIGHTGRAY);
+        t.setFont(Font.font("Segoe UI", FontWeight.BOLD, 18));
+        t.setWrapText(true);
+        t.setMaxWidth(Double.MAX_VALUE);
+        t.setAlignment(Pos.CENTER);
 
-        int numPeticiones;
+        val.setFont(Font.font("Segoe UI", FontWeight.BOLD, 20));
+        val.setTextFill(Color.web(color));
+        val.setWrapText(true);
+        val.setMaxWidth(400);
+        val.setMinWidth(220);
+        val.setAlignment(Pos.CENTER);
+
+        pb.setMaxWidth(Double.MAX_VALUE);
+        pb.setStyle("-fx-accent: " + color + ";");
+
+        card.getChildren().addAll(t, val, pb);
+        return card;
+    }
+
+    private void aplicarCSS(Scene scene) {
+        String style = """
+            .main-root { -fx-background-color: #1e1e2f; }
+            .panel-oscuro { -fx-background-color: #2b1a3a; -fx-background-radius: 20; -fx-padding: 16; }
+            .panel-metriz { -fx-background-color: #1e1e2f; -fx-border-color: #a88ff0; -fx-border-radius: 20; -fx-border-width: 2; }
+            .custom-field { -fx-background-color: #3a2a4a; -fx-text-fill: white; -fx-border-color: #a88ff0; -fx-border-radius: 5; -fx-alignment: center; -fx-font-size: 14; -fx-padding: 6 8 6 8; }
+            .btn-iniciar { -fx-background-color: linear-gradient(to bottom, #c77dff, #a64dff); -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 10; -fx-padding: 9; }
+            .btn-freno { -fx-background-color: #8b0000; -fx-text-fill: white; -fx-background-radius: 10; -fx-padding: 9; }
+            .db-selector { -fx-text-fill: white; }
+            .left-scroll { -fx-background-color: transparent; -fx-background: transparent; -fx-padding: 0; }
+            .left-scroll > .viewport { -fx-background-color: transparent; }
+            """;
+        scene.getStylesheets().add("data:text/css," + style.replace("\n", ""));
+    }
+
+    private void conectarDB() {
+        String host = txtHost.getText().trim();
+        String portTxt = txtPort.getText().trim();
+        String db = txtDb.getText().trim();
+        String user = txtUser.getText().trim();
+        String pass = txtPass.getText();
+
+        if (host.isEmpty() || portTxt.isEmpty() || db.isEmpty() || user.isEmpty()) {
+            errorMsg.setText("Completa host/puerto/bd/usuario/contraseña");
+            return;
+        }
+
+        int port;
         try {
-            numPeticiones = Integer.parseInt(txtPeticiones.getText());
-        } catch (NumberFormatException ex) {
-            lblResumen.setText("Número inválido");
-            habilitarBotones();
+            port = Integer.parseInt(portTxt);
+        } catch (NumberFormatException e) {
+            errorMsg.setText("Puerto inválido");
             return;
         }
 
-        if (numPeticiones < 1 || numPeticiones > 40000) {
-            lblResumen.setText("El número de peticiones debe estar entre 1 y 40000");
-            habilitarBotones();
-            return;
-        }
-
-        final String url = "jdbc:postgresql://" + config.obtener("DB_HOST") + ":"
-                + config.obtener("DB_PORT") + "/" + config.obtener("DB_NAME");
-        final String user = config.obtener("DB_USER");
-        final String pass = config.obtener("DB_PASSWORD");
-        final int tamPool = config.obtenerEntero("POOL_SIZE");
-        final int reintentosMax = config.obtenerEntero("REINTENTOS_MAXIMOS");
-        final String[] queriesArray = config.obtenerQueries();
-        final Supplier<String> proveedorQueries = () -> queriesArray[new Random().nextInt(queriesArray.length)];
-
-        freno = new Freno();
-
-        final PoolConexiones pool = new PoolConexiones(url, user, pass, tamPool);
-        final AdministradorPool admin = new AdministradorPool(pool);
-
-        contadorSin = null;
-        contadorCon = null;
-
-        // Timelines para actualización en tiempo real
-        timelineSin = new Timeline(new KeyFrame(Duration.millis(200), e -> {
-            if (contadorSin != null) {
-                graficoTortaSin.actualizar(contadorSin.getExitosas(), contadorSin.getFallidas());
-            }
-        }));
-        timelineSin.setCycleCount(Timeline.INDEFINITE);
-
-        timelineCon = new Timeline(new KeyFrame(Duration.millis(200), e -> {
-            if (contadorCon != null) {
-                graficoTortaCon.actualizar(contadorCon.getExitosas(), contadorCon.getFallidas());
-            }
-        }));
-        timelineCon.setCycleCount(Timeline.INDEFINITE);
-
-        final int[] simulacionesActivas = {0};
-
-        if (tipo == TipoSimulacion.RAW || tipo == TipoSimulacion.AMBOS) {
-            simulacionesActivas[0]++;
-            contadorSin = new ContadorEstadisticas();
-            final ContadorEstadisticas contadorSinFinal = contadorSin;
-            Thread hiloContadorSin = new Thread(contadorSinFinal);
-            hiloContadorSin.start();
-
-            SimuladorRaw simuladorRaw = new SimuladorRaw(
-                    numPeticiones, reintentosMax, proveedorQueries,
-                    freno, url, user, pass
-            );
-
-            Thread hiloRaw = new Thread(() -> {
-                simuladorRaw.ejecutar(contadorSinFinal, progreso -> {
-                    Platform.runLater(() -> barraSinPool.setProgress(progreso));
-                });
-
-                contadorSinFinal.detener();
-                try { hiloContadorSin.join(); } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                }
-
-                Platform.runLater(() -> {
-                    int exitosas = contadorSinFinal.getExitosas();
-                    int fallidas = contadorSinFinal.getFallidas();
-                    double pct = contadorSinFinal.getPorcentajeExito();
-                    lblEstadoSin.setText(String.format("✅ Sin pool: %d exitosas, %d fallidas (%.2f%%)", exitosas, fallidas, pct));
-                    graficoTortaSin.actualizar(exitosas, fallidas);
-                });
-
-                synchronized (simulacionesActivas) {
-                    simulacionesActivas[0]--;
-                    if (simulacionesActivas[0] == 0) {
-                        Platform.runLater(() -> {
-                            timelineSin.stop();
-                            timelineCon.stop();
-                            habilitarBotones();
-                        });
-                    }
-                }
-            });
-            hiloRaw.start();
-        }
-
-        if (tipo == TipoSimulacion.POOL || tipo == TipoSimulacion.AMBOS) {
-            simulacionesActivas[0]++;
-            contadorCon = new ContadorEstadisticas();
-            final ContadorEstadisticas contadorConFinal = contadorCon;
-            Thread hiloContadorCon = new Thread(contadorConFinal);
-            hiloContadorCon.start();
-
-            SimuladorPool simuladorPool = new SimuladorPool(
-                    numPeticiones, reintentosMax, proveedorQueries,
-                    freno, admin
-            );
-
-            Thread hiloPool = new Thread(() -> {
-                simuladorPool.ejecutar(contadorConFinal, progreso -> {
-                    Platform.runLater(() -> barraConPool.setProgress(progreso));
-                });
-
-                contadorConFinal.detener();
-                try { hiloContadorCon.join(); } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                }
-
-                Platform.runLater(() -> {
-                    int exitosas = contadorConFinal.getExitosas();
-                    int fallidas = contadorConFinal.getFallidas();
-                    double pct = contadorConFinal.getPorcentajeExito();
-                    lblEstadoCon.setText(String.format("⚡ Con pool: %d exitosas, %d fallidas (%.2f%%)", exitosas, fallidas, pct));
-                    graficoTortaCon.actualizar(exitosas, fallidas);
-                });
-
-                synchronized (simulacionesActivas) {
-                    simulacionesActivas[0]--;
-                    if (simulacionesActivas[0] == 0) {
-                        Platform.runLater(() -> {
-                            timelineSin.stop();
-                            timelineCon.stop();
-                            habilitarBotones();
-                        });
-                    }
-                }
-            });
-            hiloPool.start();
-        }
-
-        if (tipo == TipoSimulacion.RAW || tipo == TipoSimulacion.AMBOS) {
-            timelineSin.play();
-        }
-        if (tipo == TipoSimulacion.POOL || tipo == TipoSimulacion.AMBOS) {
-            timelineCon.play();
+        try {
+            DBComponentRegistry.clear(DatabaseType.POSTGRES);
+            DBComponentConnector.ConnectResult result = connector.connect(
+                    DatabaseType.POSTGRES, host, port, db, user, pass);
+            DBComponentRegistry.put(result.type(), result.component());
+            estadoPostgres.setText("PostgreSQL: conectado");
+            estadoPostgres.setTextFill(Color.web("#7CFC00"));
+            errorMsg.setText("Conectado correctamente a PostgreSQL");
+            errorMsg.setTextFill(Color.web("#7CFC00"));
+            btnSimular.setDisable(false);
+        } catch (DBException e) {
+            estadoPostgres.setText("PostgreSQL: error");
+            estadoPostgres.setTextFill(Color.web("#ff4e8e"));
+            errorMsg.setText("Error conectando: " + e.getMessage());
+            errorMsg.setTextFill(Color.web("#ff4e8e"));
+            btnSimular.setDisable(true);
         }
     }
 
-    private void habilitarBotones() {
-        btnSimularRaw.setDisable(false);
-        btnSimularPool.setDisable(false);
-        btnSimularAmbos.setDisable(false);
-        btnFreno.setDisable(true);
-        btnFreno.setStyle("");
+    private void limpiarConexionActual() {
+        DBComponentRegistry.clear(DatabaseType.POSTGRES);
+        estadoPostgres.setText("PostgreSQL: desconectado");
+        estadoPostgres.setTextFill(Color.web("#ff4e8e"));
+        btnSimular.setDisable(true);
+        errorMsg.setText("Conexión limpiada");
+        errorMsg.setTextFill(Color.web("#b6aaff"));
+    }
+
+    private void ejecutarSimulacion() {
+        if (!DBComponentRegistry.isConnected(DatabaseType.POSTGRES)) {
+            errorMsg.setText("Primero conecta a PostgreSQL");
+            return;
+        }
+
+        int num;
+        try {
+            num = Integer.parseInt(txtPeticiones.getText());
+        } catch (NumberFormatException ex) {
+            errorMsg.setText("Número inválido");
+            return;
+        }
+        if (num < 1 || num > 40000) {
+            errorMsg.setText("El número de peticiones debe estar entre 1 y 40000");
+            return;
+        }
+
+        Platform.runLater(() -> {
+            statsPool.setText("0% Éxito");
+            targetProgresoPool = 0;
+            panelGrafica.getChildren().clear();
+        });
+
+        new Thread(() -> {
+            freno.desactivar();
+
+            var colaCon = new java.util.concurrent.ConcurrentLinkedQueue<Resultado>();
+            var contador = new ContadorEstadisticas();
+            var hiloContador = new Thread(contador);
+            hiloContador.start();
+
+            var simulador = new Simulador(num, 1, () -> new DBQueryId("usuario.selectOne"), freno);
+
+            final CountDownLatch terminado = new CountDownLatch(1);
+            ScheduledFuture<?> future = scheduler.scheduleAtFixedRate(() -> {
+                int completadas = simulador.getCompletadas();
+                double progreso = completadas / (double) num;
+                Platform.runLater(() -> {
+                    targetProgresoPool = Math.min(progreso, 1.0);
+                    statsPool.setText("Pool: " + completadas + "/" + num + " | faltan " + (num - completadas));
+                });
+                if (completadas >= num || freno.estaActivado()) {
+                    if (future != null) future.cancel(false);
+                    terminado.countDown();
+                }
+            }, 0, 20, TimeUnit.MILLISECONDS);
+
+            simulador.ejecutarConPool(contador, progreso -> {});
+
+            contador.detener();
+            try { hiloContador.join(); } catch (InterruptedException ignored) {}
+
+            try { terminado.await(2, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+
+            Platform.runLater(() -> {
+                int ex = contador.getExitosas();
+                int fa = contador.getFallidas();
+                double pct = contador.getPorcentajeExito();
+                statsPool.setText(String.format("Pool: %d ok / %d fail | %.2f%% éxito", ex, fa, pct));
+                mostrarGrafica(ex, fa);
+            });
+        }).start();
+    }
+
+    private void mostrarGrafica(int exitosas, int fallidas) {
+        panelGrafica.getChildren().clear();
+        GraficoTorta grafica = new GraficoTorta("Resultados Pool");
+        grafica.actualizar(exitosas, fallidas);
+        panelGrafica.getChildren().add(grafica);
     }
 }

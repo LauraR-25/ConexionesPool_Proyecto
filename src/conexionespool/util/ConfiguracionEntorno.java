@@ -26,9 +26,4 @@ public class ConfiguracionEntorno {
     public long obtenerLargo(String clave) {
         return Long.parseLong(propiedades.getProperty(clave));
     }
-
-    public String[] obtenerQueries() {
-        String queriesStr = propiedades.getProperty("QUERIES", "SELECT * FROM usuario LIMIT 1");
-        return queriesStr.split(";\\s*");
-    }
 }

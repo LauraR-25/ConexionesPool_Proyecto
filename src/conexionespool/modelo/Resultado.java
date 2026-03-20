@@ -29,7 +29,7 @@ public class Resultado {
     public String formatoLog() {
         LocalDateTime fecha = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault());
         String hora = fecha.format(DateTimeFormatter.ISO_LOCAL_TIME);
-        return String.format("[%s] Petición %d: %s (reintentos: %d) - %s",
+        return String.format("[%s] Petición %d: %s (reintentos: %d) – %s",
                 hora, id, exitosa ? "EXITOSA" : "FALLIDA", reintentos, mensaje);
     }
 }

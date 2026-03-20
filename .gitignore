@@ -1,32 +1,21 @@
-### IntelliJ IDEA ###
+# Compiled files
+*.class
 out/
-!**/src/main/**/out/
-!**/src/test/**/out/
-.kotlin
+target/
 
-### Eclipse ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
-### VS Code ###
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
 .vscode/
+.settings/
+.project
+.classpath
 
-### Mac OS ###
-.DS_Store
-
+# Logs
+*.log
 simulacion.log
+
+# Database
+.env
