@@ -1,10 +1,12 @@
 package conexionespool.simulacion;
 
-import conexionespool.modelo.ContadorEstadisticas;
-import conexionespool.modelo.Resultado;
 import conexionespool.componentes.DBComponent;
 import conexionespool.componentes.DBComponentRegistry;
 import conexionespool.componentes.DBQueryId;
+import conexionespool.modelo.ContadorEstadisticas;
+import conexionespool.modelo.Resultado;
+import conexionespool.util.Freno;
+import conexionespool.util.DatabaseType;
 
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -15,12 +17,12 @@ public class Simulador {
     private final int totalMuestras;
     private final int reintentosMaximos;
     private final Supplier<DBQueryId> proveedorQueryId;
-    private final DatabaseType freno;
+    private final Freno freno;
     private final AtomicInteger completadas = new AtomicInteger(0);
     private final Random random = new Random();
 
     public Simulador(int totalMuestras, int reintentosMaximos,
-                     Supplier<DBQueryId> proveedorQueryId, DatabaseType freno) {
+                     Supplier<DBQueryId> proveedorQueryId, Freno freno) {
         this.totalMuestras = totalMuestras;
         this.reintentosMaximos = reintentosMaximos;
         this.proveedorQueryId = proveedorQueryId;

@@ -9,6 +9,8 @@ import conexionespool.modelo.ContadorEstadisticas;
 import conexionespool.modelo.Resultado;
 import conexionespool.simulacion.Simulador;
 import conexionespool.util.ConfiguracionEntorno;
+import conexionespool.util.DatabaseType;
+import conexionespool.util.Freno;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -44,7 +46,7 @@ public class VentanaPrincipal extends Application {
 
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     private final DBComponentConnector connector = new DBComponentConnector();
-    private final DatabaseType freno = new DatabaseType();
+    private final Freno freno = new Freno();
 
     // Progreso objetivo y suavizado
     private double targetProgresoPool = 0;
@@ -381,18 +383,24 @@ public class VentanaPrincipal extends Application {
             var simulador = new Simulador(num, 1, () -> new DBQueryId("usuario.selectOne"), freno);
 
             final CountDownLatch terminado = new CountDownLatch(1);
-            ScheduledFuture<?> future = scheduler.scheduleAtFixedRate(() -> {
-                int completadas = simulador.getCompletadas();
-                double progreso = completadas / (double) num;
-                Platform.runLater(() -> {
-                    targetProgresoPool = Math.min(progreso, 1.0);
-                    statsPool.setText("Pool: " + completadas + "/" + num + " | faltan " + (num - completadas));
-                });
-                if (completadas >= num || freno.estaActivado()) {
-                    if (future != null) future.cancel(false);
-                    terminado.countDown();
-                }
-            }, 0, 20, TimeUnit.MILLISECONDS);
+            final ScheduledFuture<?>[] future = new ScheduledFuture<?>[1]; // Usamos array para que sea efectivamente final
+
+            try {
+                future[0] = scheduler.scheduleAtFixedRate(() -> {
+                    int completadas = simulador.getCompletadas();
+                    double progreso = completadas / (double) num;
+                    Platform.runLater(() -> {
+                        targetProgresoPool = Math.min(progreso, 1.0);
+                        statsPool.setText("Pool: " + completadas + "/" + num + " | faltan " + (num - completadas));
+                    });
+                    if (completadas >= num || freno.estaActivado()) {
+                        if (future[0] != null) future[0].cancel(false);
+                        terminado.countDown();
+                    }
+                }, 0, 20, TimeUnit.MILLISECONDS);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
 
             simulador.ejecutarConPool(contador, progreso -> {});
 
