@@ -1,71 +1,79 @@
 package conexionespool.simulacion;
 
-import conexionespool.componentes.DBComponent;
-import conexionespool.componentes.DBComponentRegistry;
-import conexionespool.componentes.DBQueryId;
 import conexionespool.modelo.ContadorEstadisticas;
 import conexionespool.modelo.Resultado;
 import conexionespool.util.Freno;
-import conexionespool.adaptadores.DatabaseType; // ← import correcto
 
+import java.sql.*;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class Simulador {
+public class SimuladorRaw {
     private final int totalMuestras;
     private final int reintentosMaximos;
-    private final Supplier<DBQueryId> proveedorQueryId;
+    private final Supplier<String> proveedorQuery;
     private final Freno freno;
-    private final AtomicInteger completadas = new AtomicInteger(0);
     private final Random random = new Random();
+    private final String url, user, pass;
+    private final AtomicInteger completadas = new AtomicInteger(0);
 
-    public Simulador(int totalMuestras, int reintentosMaximos,
-                     Supplier<DBQueryId> proveedorQueryId, Freno freno) {
+    public SimuladorRaw(int totalMuestras, int reintentosMaximos, Supplier<String> proveedorQuery,
+                        Freno freno, String url, String user, String pass) {
         this.totalMuestras = totalMuestras;
         this.reintentosMaximos = reintentosMaximos;
-        this.proveedorQueryId = proveedorQueryId;
+        this.proveedorQuery = proveedorQuery;
         this.freno = freno;
+        this.url = url;
+        this.user = user;
+        this.pass = pass;
     }
 
     public int getCompletadas() {
         return completadas.get();
     }
 
-    public void ejecutarConPool(ContadorEstadisticas contador, Consumer<Double> actualizadorProgreso) {
+    public void ejecutar(ContadorEstadisticas contador, Consumer<Double> actualizadorProgreso) {
         Thread[] hilos = new Thread[totalMuestras];
         for (int i = 0; i < totalMuestras; i++) {
             final int id = i + 1;
-            final DBQueryId queryId = proveedorQueryId.get();
+            final String query = proveedorQuery.get();
             hilos[i] = new Thread(() -> {
                 if (freno.estaActivado()) return;
-                ejecutarMuestra(id, queryId, contador, actualizadorProgreso);
+                ejecutarMuestra(id, query, contador, actualizadorProgreso);
                 completadas.incrementAndGet();
             });
             hilos[i].start();
         }
 
         for (Thread h : hilos) {
-            try { h.join(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try {
+                h.join();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
-    private void ejecutarMuestra(int id, DBQueryId queryId, ContadorEstadisticas contador,
-                                 Consumer<Double> actualizador) {
+    private void ejecutarMuestra(int id, String query, ContadorEstadisticas contador, Consumer<Double> actualizador) {
         boolean exito = false;
         String mensajeError = "";
         int reintentos = 0;
 
         while (reintentos <= reintentosMaximos && !exito && !freno.estaActivado()) {
-            try {
-                DBComponent comp = DBComponentRegistry.get(DatabaseType.POSTGRES); // ← usar el enum de adaptadores
-                comp.query(queryId);
-                exito = true;
+            try (Connection conn = DriverManager.getConnection(url, user, pass)) {
+                try (Statement stmt = conn.createStatement()) {
+                    ResultSet rs = stmt.executeQuery(query);
+                    if (rs.next()) exito = true;
+                    rs.close();
+                }
                 break;
-            } catch (Exception e) {
+            } catch (SQLException e) {
                 mensajeError = e.getMessage();
                 reintentos++;
+                // Log opcional
+                // System.out.println("❌ Raw - Error en petición " + id + " (reintento " + reintentos + "): " + mensajeError);
             }
         }
 

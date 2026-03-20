@@ -1,17 +1,12 @@
 package conexionespool.componentes;
 
-import conexionespool.util.DatabaseType;
-
+import conexionespool.adaptadores.DatabaseType; // ← import correcto
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Registro simple para mantener 1 DBComponent por tipo de BD.
- */
 public final class DBComponentRegistry {
     private static final ConcurrentHashMap<DatabaseType, DBComponent> COMPONENTS = new ConcurrentHashMap<>();
 
-    private DBComponentRegistry() {
-    }
+    private DBComponentRegistry() {}
 
     public static void put(DatabaseType type, DBComponent component) {
         if (type == null) throw new IllegalArgumentException("type no puede ser null");
@@ -25,10 +20,7 @@ public final class DBComponentRegistry {
 
         DBComponent previous = COMPONENTS.put(type, component);
         if (previous != null && previous != component) {
-            try {
-                previous.disconnect();
-            } catch (Exception ignored) {
-            }
+            try { previous.disconnect(); } catch (Exception ignored) {}
         }
     }
 
@@ -38,13 +30,9 @@ public final class DBComponentRegistry {
 
     public static void clear(DatabaseType type) {
         if (type == null) throw new IllegalArgumentException("type no puede ser null");
-
         DBComponent removed = COMPONENTS.remove(type);
         if (removed != null) {
-            try {
-                removed.disconnect();
-            } catch (Exception ignored) {
-            }
+            try { removed.disconnect(); } catch (Exception ignored) {}
         }
     }
 
