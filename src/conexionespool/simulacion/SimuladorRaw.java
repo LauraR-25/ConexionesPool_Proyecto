@@ -3,7 +3,6 @@ package conexionespool.simulacion;
 import conexionespool.modelo.ContadorEstadisticas;
 import conexionespool.modelo.Resultado;
 import conexionespool.util.Freno;
-import conexionespool.util.LoggerMuestras;
 
 import java.sql.*;
 import java.util.Random;
@@ -15,18 +14,15 @@ public class SimuladorRaw {
     private final int reintentosMaximos;
     private final Supplier<String> proveedorQuery;
     private final Freno freno;
-    private final LoggerMuestras logger;
     private final Random random = new Random();
     private final String url, user, pass;
 
     public SimuladorRaw(int totalMuestras, int reintentosMaximos, Supplier<String> proveedorQuery,
-                        Freno freno, LoggerMuestras logger,
-                        String url, String user, String pass) {
+                        Freno freno, String url, String user, String pass) {
         this.totalMuestras = totalMuestras;
         this.reintentosMaximos = reintentosMaximos;
         this.proveedorQuery = proveedorQuery;
         this.freno = freno;
-        this.logger = logger;
         this.url = url;
         this.user = user;
         this.pass = pass;
@@ -69,13 +65,12 @@ public class SimuladorRaw {
             } catch (SQLException e) {
                 mensajeError = e.getMessage();
                 reintentos++;
-                logger.log(String.format("Raw %d reintento %d: %s", id, reintentos, mensajeError));
+                // Sin logs para mejorar rendimiento
             }
         }
 
         Resultado resultado = new Resultado(id, exito, exito ? "OK" : mensajeError, reintentos, System.currentTimeMillis());
         contador.registrar(resultado);
-        logger.log(resultado.formatoLog());
         actualizador.accept((double) id / totalMuestras);
     }
 }

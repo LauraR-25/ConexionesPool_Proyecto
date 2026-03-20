@@ -7,7 +7,6 @@ import conexionespool.simulacion.SimuladorPool;
 import conexionespool.simulacion.SimuladorRaw;
 import conexionespool.util.ConfiguracionEntorno;
 import conexionespool.util.Freno;
-import conexionespool.util.LoggerMuestras;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
@@ -58,7 +57,6 @@ public class VentanaPrincipal extends Application {
         graficoTortaSin = new GraficoTorta("Sin Pool");
         graficoTortaCon = new GraficoTorta("Con Pool");
 
-        // CSS embebido
         String css = """
             .root {
                 -fx-background-color: linear-gradient(to bottom, #2b1a3a, #3c2a4d);
@@ -125,7 +123,7 @@ public class VentanaPrincipal extends Application {
             }
             """;
 
-        Scene scene = new Scene(crearLayout(), 1100, 700); // Reducido altura porque quitamos logs
+        Scene scene = new Scene(crearLayout(), 1100, 800);
         scene.getStylesheets().add("data:text/css," + css.replace("\n", "").replace(" ", " "));
         stage.setScene(scene);
         stage.setTitle("ConexionesPool - Simulación");
@@ -225,7 +223,6 @@ public class VentanaPrincipal extends Application {
             return;
         }
 
-        // Rango 1 - 40000
         if (numPeticiones < 1 || numPeticiones > 40000) {
             lblResumen.setText("El número de peticiones debe estar entre 1 y 40000");
             habilitarBotones();
@@ -242,8 +239,6 @@ public class VentanaPrincipal extends Application {
         final Supplier<String> proveedorQueries = () -> queriesArray[new Random().nextInt(queriesArray.length)];
 
         freno = new Freno();
-        // Usamos LoggerMuestras directamente (escribe en archivo, no en interfaz)
-        final LoggerMuestras logger = new LoggerMuestras();
 
         final PoolConexiones pool = new PoolConexiones(url, user, pass, tamPool);
         final AdministradorPool admin = new AdministradorPool(pool);
@@ -277,7 +272,7 @@ public class VentanaPrincipal extends Application {
 
             SimuladorRaw simuladorRaw = new SimuladorRaw(
                     numPeticiones, reintentosMax, proveedorQueries,
-                    freno, logger, url, user, pass
+                    freno, url, user, pass
             );
 
             Thread hiloRaw = new Thread(() -> {
@@ -321,7 +316,7 @@ public class VentanaPrincipal extends Application {
 
             SimuladorPool simuladorPool = new SimuladorPool(
                     numPeticiones, reintentosMax, proveedorQueries,
-                    freno, logger, admin
+                    freno, admin
             );
 
             Thread hiloPool = new Thread(() -> {
@@ -356,7 +351,6 @@ public class VentanaPrincipal extends Application {
             hiloPool.start();
         }
 
-        // Iniciar timelines
         if (tipo == TipoSimulacion.RAW || tipo == TipoSimulacion.AMBOS) {
             timelineSin.play();
         }
