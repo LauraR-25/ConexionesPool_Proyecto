@@ -50,6 +50,7 @@ public class VentanaPrincipal extends Application {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     private final DBComponentConnector connector = new DBComponentConnector();
     private final Freno freno = new Freno();
+    private ConfiguracionEntorno envConfig;
 
     // Progresso suavizado
     private double targetProgresoRaw = 0, shownProgresoRaw = 0;
@@ -57,15 +58,16 @@ public class VentanaPrincipal extends Application {
     private AnimationTimer smoothTimer;
 
     private final Label errorMsg = new Label("");
+    private volatile boolean simulacionEnCurso = false;
 
     @Override
     public void start(Stage stage) {
-        ConfiguracionEntorno config = new ConfiguracionEntorno(".env");
-        String host = config.obtener("DB_HOST");
-        String port = config.obtener("DB_PORT");
-        String db = config.obtener("DB_NAME");
-        String user = config.obtener("DB_USER");
-        String pass = config.obtener("DB_PASSWORD");
+        envConfig = new ConfiguracionEntorno(".env");
+        String host = envConfig.obtener("DB_HOST");
+        String port = envConfig.obtener("DB_PORT");
+        String db = envConfig.obtener("DB_NAME");
+        String user = envConfig.obtener("DB_USER");
+        String pass = envConfig.obtener("DB_PASSWORD");
 
         // --- Configurar interfaz ---
         HBox root = new HBox(25);
@@ -92,14 +94,12 @@ public class VentanaPrincipal extends Application {
         Scene scene = new Scene(root, 1200, 800);
         aplicarCSS(scene);
 
-        // Prellenar campos y conectar automáticamente
-        Platform.runLater(() -> conectarDB(host, port, db, user, pass));
-
         stage.setTitle("ConexionesPool - Simulación (Raw vs Pool)");
         stage.setScene(scene);
         stage.show();
 
         startSmoothProgressAnimation();
+        aplicarDefaultsMotorSeleccionado();
 
         btnSimular.setOnAction(_ -> ejecutarSimulacion());
     }
@@ -127,6 +127,7 @@ public class VentanaPrincipal extends Application {
         cmbDatabase.setValue(DatabaseType.POSTGRES);
         cmbDatabase.getStyleClass().add("custom-field");
         cmbDatabase.setMaxWidth(Double.MAX_VALUE);
+        cmbDatabase.setOnAction(_ -> aplicarDefaultsMotorSeleccionado());
 
         Label lblEstado = new Label("Estado de conexión");
         lblEstado.setTextFill(Color.LIGHTGRAY);
@@ -326,19 +327,21 @@ public class VentanaPrincipal extends Application {
     }
 
     private void conectarDB(String host, String portTxt, String db, String user, String pass) {
-        if (host.isEmpty() || portTxt.isEmpty() || db.isEmpty() || user.isEmpty()) {
+        DatabaseType tipo = cmbDatabase.getValue();
+
+        boolean requiereHostPuerto = tipo != DatabaseType.H2;
+        if ((requiereHostPuerto && (host.isEmpty() || portTxt.isEmpty())) || db.isEmpty() || user.isEmpty()) {
             errorMsg.setText("Completa todos los campos");
             return;
         }
         int port;
         try {
-            port = Integer.parseInt(portTxt);
+            port = requiereHostPuerto ? Integer.parseInt(portTxt) : 0;
         } catch (NumberFormatException e) {
             errorMsg.setText("Puerto inválido");
             return;
         }
 
-        DatabaseType tipo = cmbDatabase.getValue();
         try {
             DBComponentRegistry.clear(tipo);
             DBComponentConnector.ConnectResult result = connector.connect(
@@ -349,58 +352,6 @@ public class VentanaPrincipal extends Application {
             errorMsg.setText("Conectado correctamente a " + tipo);
             errorMsg.setTextFill(Color.web("#7CFC00"));
             btnSimular.setDisable(false);
-
-            // --- Inicialización de tablas para H2 y MySQL con depuración ---
-            if (tipo == DatabaseType.H2) {
-                try {
-                    String h2Url = "jdbc:h2:./databases/" + db;
-                    System.out.println("DEBUG H2: Intentando conectar con URL: " + h2Url);
-                    Connection conn = DriverManager.getConnection(h2Url, user, pass);
-                    System.out.println("DEBUG H2: Conexión exitosa.");
-                    Statement st = conn.createStatement();
-                    st.execute("CREATE TABLE IF NOT EXISTS usuario (id INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(100))");
-                    ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM usuario");
-                    rs.next();
-                    if (rs.getInt(1) == 0) {
-                        st.execute("INSERT INTO usuario (nombre) VALUES ('Prueba')");
-                        System.out.println("DEBUG H2: Se insertó registro de prueba.");
-                    } else {
-                        System.out.println("DEBUG H2: La tabla ya tenía datos.");
-                    }
-                    rs.close();
-                    st.close();
-                    conn.close();
-                    System.out.println("DEBUG H2: Tabla usuario verificada/creada.");
-                } catch (Exception e) {
-                    System.err.println("DEBUG H2: ERROR: " + e.getMessage());
-                    e.printStackTrace();
-                }
-            } else if (tipo == DatabaseType.MYSQL) {
-                try {
-                    String mysqlUrl = "jdbc:mysql://" + host + ":" + port + "/" + db;
-                    System.out.println("DEBUG MySQL: Intentando conectar con URL: " + mysqlUrl);
-                    Connection conn = DriverManager.getConnection(mysqlUrl, user, pass);
-                    System.out.println("DEBUG MySQL: Conexión exitosa.");
-                    Statement st = conn.createStatement();
-                    st.execute("CREATE TABLE IF NOT EXISTS usuario (id INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(100))");
-                    ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM usuario");
-                    rs.next();
-                    if (rs.getInt(1) == 0) {
-                        st.execute("INSERT INTO usuario (nombre) VALUES ('Prueba')");
-                        System.out.println("DEBUG MySQL: Se insertó registro de prueba.");
-                    } else {
-                        System.out.println("DEBUG MySQL: La tabla ya tenía datos.");
-                    }
-                    rs.close();
-                    st.close();
-                    conn.close();
-                    System.out.println("DEBUG MySQL: Tabla usuario verificada/creada.");
-                } catch (Exception e) {
-                    System.err.println("DEBUG MySQL: ERROR: " + e.getMessage());
-                    e.printStackTrace();
-                }
-            }
-
         } catch (DBException e) {
             estadoConexion.setText(tipo + ": error");
             estadoConexion.setTextFill(Color.web("#ff4e8e"));
@@ -421,6 +372,11 @@ public class VentanaPrincipal extends Application {
     }
 
     private void ejecutarSimulacion() {
+        if (simulacionEnCurso) {
+            errorMsg.setText("Ya hay una simulación en curso");
+            return;
+        }
+
         DatabaseType tipo = cmbDatabase.getValue();
         if (!DBComponentRegistry.isConnected(tipo)) {
             errorMsg.setText("Conecta a " + tipo + " primero");
@@ -439,8 +395,17 @@ public class VentanaPrincipal extends Application {
             return;
         }
 
+        final String host = txtHost.getText().trim();
+        final String port = txtPort.getText().trim();
+        final String db = txtDb.getText().trim();
+        final String user = txtUser.getText().trim();
+        final String pass = txtPass.getText();
+
         // Reset UI
         Platform.runLater(() -> {
+            simulacionEnCurso = true;
+            btnSimular.setDisable(true);
+            cmbDatabase.setDisable(true);
             targetProgresoRaw = 0;
             targetProgresoPool = 0;
             lblEstadoRaw.setText("Raw: en progreso...");
@@ -448,26 +413,35 @@ public class VentanaPrincipal extends Application {
             graficaRaw.limpiar();
             graficaPool.limpiar();
             lblResumen.setText("");
+            errorMsg.setText("");
         });
 
         new Thread(() -> {
-            freno.desactivar();
+            try {
+                freno.desactivar();
 
             // Construir URL para la simulación Raw según el tipo de base de datos
             String url;
             if (tipo == DatabaseType.POSTGRES) {
-                url = "jdbc:postgresql://" + txtHost.getText().trim() + ":" + txtPort.getText().trim() + "/" + txtDb.getText().trim();
+                url = "jdbc:postgresql://" + host + ":" + port + "/" + db + "?connectTimeout=1&socketTimeout=2";
             } else if (tipo == DatabaseType.MYSQL) {
-                url = "jdbc:mysql://" + txtHost.getText().trim() + ":" + txtPort.getText().trim() + "/" + txtDb.getText().trim();
+                url = "jdbc:mysql://" + host + ":" + port + "/" + db + "?connectTimeout=1000&socketTimeout=2000";
             } else if (tipo == DatabaseType.H2) {
-                url = "jdbc:h2:./databases/" + txtDb.getText().trim();
+                url = "jdbc:h2:./databases/" + db;
             } else {
-                url = "jdbc:postgresql://" + txtHost.getText().trim() + ":" + txtPort.getText().trim() + "/" + txtDb.getText().trim();
+                url = "jdbc:postgresql://" + host + ":" + port + "/" + db;
             }
-
-            String user = txtUser.getText().trim();
-            String pass = txtPass.getText();
             String query = "SELECT * FROM usuario LIMIT 1";
+            int reintentos = 1;
+            try {
+                ConfiguracionEntorno conf = new ConfiguracionEntorno(".env");
+                String rawRetries = conf.obtener("REINTENTOS_MAXIMOS");
+                if (rawRetries != null && !rawRetries.isBlank()) {
+                    reintentos = Math.max(0, Integer.parseInt(rawRetries.trim()));
+                }
+            } catch (Exception ignored) {
+                // Si .env no está disponible o es inválido, se mantiene el valor por defecto.
+            }
 
             // Contadores y simuladores
             ContadorEstadisticas contadorRaw = new ContadorEstadisticas();
@@ -478,8 +452,8 @@ public class VentanaPrincipal extends Application {
             hiloContadorRaw.start();
             hiloContadorPool.start();
 
-            SimuladorRaw simuladorRaw = new SimuladorRaw(num, 1, () -> query, freno, url, user, pass);
-            Simulador simuladorPool = new Simulador(num, 1, () -> new DBQueryId("usuario.selectOne"), freno);
+            SimuladorRaw simuladorRaw = new SimuladorRaw(num, reintentos, () -> query, freno, url, user, pass);
+            Simulador simuladorPool = new Simulador(num, reintentos, () -> new DBQueryId("usuario.selectOne"), freno, tipo);
 
             CountDownLatch terminadoRaw = new CountDownLatch(1);
             CountDownLatch terminadoPool = new CountDownLatch(1);
@@ -510,10 +484,16 @@ public class VentanaPrincipal extends Application {
                 e.printStackTrace();
             }
 
-            Thread hiloRaw = new Thread(() -> simuladorRaw.ejecutar(contadorRaw, p -> {}));
-            Thread hiloPool = new Thread(() -> simuladorPool.ejecutarConPool(contadorPool, p -> {}));
+            CountDownLatch disparoSimultaneo = new CountDownLatch(1);
+            Thread hiloRaw = new Thread(() -> {
+                simuladorRaw.ejecutar(contadorRaw, p -> {}, disparoSimultaneo);
+            });
+            Thread hiloPool = new Thread(() -> {
+                simuladorPool.ejecutarConPool(contadorPool, p -> {}, disparoSimultaneo);
+            });
             hiloRaw.start();
             hiloPool.start();
+            disparoSimultaneo.countDown();
 
             try {
                 hiloRaw.join();
@@ -553,6 +533,52 @@ public class VentanaPrincipal extends Application {
                 String mejor = (pctRaw > pctPool) ? "SIN POOL (Raw)" : (pctPool > pctRaw) ? "CON POOL (Pooled)" : "EMPATE";
                 lblResumen.setText("🏆 Mejor rendimiento: " + mejor);
             });
+            } catch (Exception e) {
+                Platform.runLater(() -> errorMsg.setText("Error en simulación: " + e.getMessage()));
+            } finally {
+                Platform.runLater(() -> {
+                btnSimular.setDisable(false);
+                cmbDatabase.setDisable(false);
+                simulacionEnCurso = false;
+                });
+            }
         }).start();
     }
+
+    private void aplicarDefaultsMotorSeleccionado() {
+        DatabaseType tipo = cmbDatabase.getValue();
+        if (tipo == null || envConfig == null) {
+            return;
+        }
+
+        switch (tipo) {
+            case POSTGRES -> {
+                txtHost.setText(valorEnv("DB_HOST", "localhost"));
+                txtPort.setText(valorEnv("DB_PORT", "5432"));
+                txtDb.setText(valorEnv("DB_NAME", "javaprueba"));
+                txtUser.setText(valorEnv("DB_USER", "postgres"));
+                txtPass.setText(valorEnv("DB_PASSWORD", ""));
+            }
+            case MYSQL -> {
+                txtHost.setText(valorEnv("MYSQL_HOST", "localhost"));
+                txtPort.setText(valorEnv("MYSQL_PORT", "3306"));
+                txtDb.setText(valorEnv("MYSQL_DB", "javaprueba"));
+                txtUser.setText(valorEnv("MYSQL_USER", "root"));
+                txtPass.setText(valorEnv("MYSQL_PASSWORD", ""));
+            }
+            case H2 -> {
+                txtHost.setText("");
+                txtPort.setText("0");
+                txtDb.setText(valorEnv("H2_DB", valorEnv("DB_NAME", "javaprueba")));
+                txtUser.setText(valorEnv("H2_USER", "sa"));
+                txtPass.setText(valorEnv("H2_PASSWORD", ""));
+            }
+        }
+    }
+
+    private String valorEnv(String key, String fallback) {
+        String value = envConfig.obtener(key);
+        return (value == null || value.isBlank()) ? fallback : value.trim();
+    }
+
 }

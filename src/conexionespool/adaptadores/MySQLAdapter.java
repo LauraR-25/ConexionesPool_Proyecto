@@ -14,7 +14,8 @@ public class MySQLAdapter implements IDBAdapter {
 
     @Override
     public String buildJdbcUrl(String host, int port, String dbName) {
-        return "jdbc:mysql://" + host + ":" + port + "/" + dbName;
+        return "jdbc:mysql://" + host + ":" + port + "/" + dbName +
+                "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
     }
 
     @Override

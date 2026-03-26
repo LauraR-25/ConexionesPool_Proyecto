@@ -13,9 +13,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
+import conexionespool.pool.Config;
 import conexionespool.pool.PoolManager;
 
 public final class DBComponent implements DBConnection {
+    private static final int DEFAULT_QUERY_TIMEOUT_SECONDS = 10;
     private final PoolManager poolManager;
     private final DBQueries queries;
     private final String queriesLocation;
@@ -109,6 +111,11 @@ public final class DBComponent implements DBConnection {
         }
     }
 
+    private int statementTimeoutSeconds() {
+        int configured = Config.getInt("QUERY_TIMEOUT_SECONDS");
+        return configured > 0 ? configured : DEFAULT_QUERY_TIMEOUT_SECONDS;
+    }
+
     @Override
     public synchronized void connect() {
         connected = true;
@@ -136,7 +143,9 @@ public final class DBComponent implements DBConnection {
     public DBQueryResult<List<Object[]>> query(DBQueryId id) throws DBException {
         String sql = queries.sql(id);
         Connection c = acquire();
-        try (Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+        try (Statement st = c.createStatement()) {
+            st.setQueryTimeout(statementTimeoutSeconds());
+            try (ResultSet rs = st.executeQuery(sql)) {
             var rows = new ArrayList<Object[]>();
             int cols = rs.getMetaData().getColumnCount();
             while (rs.next()) {
@@ -145,6 +154,7 @@ public final class DBComponent implements DBConnection {
                 rows.add(row);
             }
             return new DBQueryResult<>(rows, 0);
+            }
         } catch (SQLException e) {
             throw DBException.fromSQLException(e, "query(" + id + ")");
         } finally {
@@ -157,12 +167,15 @@ public final class DBComponent implements DBConnection {
         String sql = queries.sql(id);
 
         Connection c = acquire();
-        try (Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+        try (Statement st = c.createStatement()) {
+            st.setQueryTimeout(statementTimeoutSeconds());
+            try (ResultSet rs = st.executeQuery(sql)) {
             List<R> out = new ArrayList<>();
             while (rs.next()) {
                 out.add(mapper.mapRow(rs));
             }
             return new DBQueryResult<>(out, 0);
+            }
         } catch (SQLException e) {
             throw DBException.fromSQLException(e, "query(" + id + ", mapper)");
         } finally {
@@ -174,6 +187,7 @@ public final class DBComponent implements DBConnection {
         String sql = queries.sql(id);
         Connection c = acquire();
         try (Statement st = c.createStatement()) {
+            st.setQueryTimeout(statementTimeoutSeconds());
             int affected = st.executeUpdate(sql);
             return new DBQueryResult<>(null, affected);
         } catch (SQLException e) {
@@ -320,6 +334,7 @@ public final class DBComponent implements DBConnection {
         public synchronized DBQueryResult<int[]> executeBatch() throws DBException {
             Connection c = owner.acquire();
             try (Statement st = c.createStatement()) {
+                st.setQueryTimeout(owner.statementTimeoutSeconds());
                 for (DBQueryId id : pending) {
                     st.addBatch(owner.queries.sql(id));
                 }
@@ -355,6 +370,7 @@ public final class DBComponent implements DBConnection {
             int resultRows = 0;
 
             try (Statement st = c.createStatement()) {
+                st.setQueryTimeout(owner.statementTimeoutSeconds());
                 for (String sql : statements) {
                     total++;
                     boolean hasResultSet = st.execute(sql);
