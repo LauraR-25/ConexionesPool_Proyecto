@@ -26,6 +26,7 @@ import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 
 import java.sql.*;
+import java.util.EnumMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -50,6 +51,8 @@ public class VentanaPrincipal extends Application {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     private final DBComponentConnector connector = new DBComponentConnector();
     private final Freno freno = new Freno();
+    private final EnumMap<DatabaseType, conexionespool.componentes.ConnectionConfig> connectionConfigs =
+            new EnumMap<>(DatabaseType.class);
     private ConfiguracionEntorno envConfig;
 
     // Progresso suavizado
@@ -347,6 +350,7 @@ public class VentanaPrincipal extends Application {
             DBComponentConnector.ConnectResult result = connector.connect(
                     tipo, host, port, db, user, pass);
             DBComponentRegistry.put(result.type(), result.component());
+            connectionConfigs.put(tipo, result.config());
             estadoConexion.setText(tipo + ": conectado");
             estadoConexion.setTextFill(Color.web("#7CFC00"));
             errorMsg.setText("Conectado correctamente a " + tipo);
@@ -364,6 +368,7 @@ public class VentanaPrincipal extends Application {
     private void limpiarConexion() {
         DatabaseType tipo = cmbDatabase.getValue();
         DBComponentRegistry.clear(tipo);
+        connectionConfigs.remove(tipo);
         estadoConexion.setText(tipo + ": desconectado");
         estadoConexion.setTextFill(Color.web("#ff4e8e"));
         btnSimular.setDisable(true);
@@ -420,16 +425,22 @@ public class VentanaPrincipal extends Application {
             try {
                 freno.desactivar();
 
-            // Construir URL para la simulación Raw según el tipo de base de datos
-            String url;
+            conexionespool.componentes.ConnectionConfig config = connectionConfigs.get(tipo);
+            if (config == null) {
+                throw new IllegalStateException("No hay configuración de conexión activa. Presiona Conectar antes de iniciar.");
+            }
+
+            // Raw debe usar la misma URL/credenciales ya validadas por el conector.
+            String url = config.url();
+            String rawUser = config.user();
+            String rawPass = config.password();
+
             if (tipo == DatabaseType.POSTGRES) {
-                url = "jdbc:postgresql://" + host + ":" + port + "/" + db + "?connectTimeout=1&socketTimeout=2";
+                url = appendIfMissing(url, "connectTimeout=1");
+                url = appendIfMissing(url, "socketTimeout=2");
             } else if (tipo == DatabaseType.MYSQL) {
-                url = "jdbc:mysql://" + host + ":" + port + "/" + db + "?connectTimeout=1000&socketTimeout=2000";
-            } else if (tipo == DatabaseType.H2) {
-                url = "jdbc:h2:./databases/" + db;
-            } else {
-                url = "jdbc:postgresql://" + host + ":" + port + "/" + db;
+                url = appendIfMissing(url, "connectTimeout=1000");
+                url = appendIfMissing(url, "socketTimeout=2000");
             }
             String query = "SELECT * FROM usuario LIMIT 1";
             int reintentos = 1;
@@ -452,7 +463,7 @@ public class VentanaPrincipal extends Application {
             hiloContadorRaw.start();
             hiloContadorPool.start();
 
-            SimuladorRaw simuladorRaw = new SimuladorRaw(num, reintentos, () -> query, freno, url, user, pass);
+            SimuladorRaw simuladorRaw = new SimuladorRaw(num, reintentos, () -> query, freno, url, rawUser, rawPass);
             Simulador simuladorPool = new Simulador(num, reintentos, () -> new DBQueryId("usuario.selectOne"), freno, tipo);
 
             CountDownLatch terminadoRaw = new CountDownLatch(1);
@@ -579,6 +590,17 @@ public class VentanaPrincipal extends Application {
     private String valorEnv(String key, String fallback) {
         String value = envConfig.obtener(key);
         return (value == null || value.isBlank()) ? fallback : value.trim();
+    }
+
+    private String appendIfMissing(String url, String param) {
+        if (url == null || url.isBlank() || param == null || param.isBlank()) {
+            return url;
+        }
+        String key = param.substring(0, param.indexOf('='));
+        if (url.contains(key + "=")) {
+            return url;
+        }
+        return url + (url.contains("?") ? "&" : "?") + param;
     }
 
 }
