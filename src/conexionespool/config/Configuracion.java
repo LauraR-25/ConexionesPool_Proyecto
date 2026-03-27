@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
-//* Clase para cargar y representar la configuración de la aplicación desde un archivo .properties. *//
+// Clase para cargar y representar la configuración de la aplicación desde un archivo .properties. *//
 public class Configuracion {
     private final Properties props = new Properties();
 
@@ -26,12 +26,16 @@ public class Configuracion {
     public String getUsuario() { return props.getProperty("db.user"); }
     public String getPassword() { return props.getProperty("db.password"); }
 
+    // Construye la URL JDBC para PostgreSQL
     public String getUrl() {
         return "jdbc:postgresql://" + getHost() + ":" + getPuerto() + "/" + getBase();
     }
 
+    // Devuelve el nombre del driver JDBC
     public String getQueryPrincipal() { return props.getProperty("query.principal"); }
 
+
+    // Carga todas las queries secundarias que siguen el patrón
     public List<String> getQueriesSecundarias() {
         List<String> lista = new ArrayList<>();
         for (int i = 1; ; i++) {
@@ -42,6 +46,10 @@ public class Configuracion {
         return lista;
     }
 
+
+
+
+    // Configuración de la simulación
     public int getMuestrasIniciales() { return Integer.parseInt(props.getProperty("muestras.inicial")); }
     public int getMuestrasFinal() { return Integer.parseInt(props.getProperty("muestras.final")); }
     public int getPaso() { return Integer.parseInt(props.getProperty("muestras.paso")); }

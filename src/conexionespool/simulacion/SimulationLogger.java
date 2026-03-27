@@ -8,10 +8,12 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.concurrent.locks.ReentrantLock;
 
+// Clase para manejar el logging de la simulación
 public class SimulationLogger {
     private static final String LOG_FILE = "simulacion.log";
     private static final ReentrantLock lock = new ReentrantLock();
 
+    // Metodo para escribir un resultado en el log
     public static void log(Resultado resultado) {
         lock.lock();
         try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(LOG_FILE, true)))) {
@@ -23,7 +25,7 @@ public class SimulationLogger {
         }
     }
 
-    // Método para escribir una línea en el log
+    // "" una línea en el log
     public static void logLinea(String linea) {
         lock.lock();
         try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(LOG_FILE, true)))) {
@@ -35,7 +37,7 @@ public class SimulationLogger {
         }
     }
 
-    // Método para limpiar el log (sobrescribe el archivo)
+    // "" limpiar el log (sobrescribe el archivo)
     public static void limpiarLog() {
         lock.lock();
         try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(LOG_FILE, false)))) {

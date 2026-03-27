@@ -71,11 +71,12 @@ public class SimuladorRaw {
         return completadas.get();
     }
 
-    // Método principal para ejecutar la simulación
+    // Metodo principal para ejecutar la simulación
     public void ejecutar(ContadorEstadisticas contador, Consumer<Double> actualizadorProgreso) {
         ejecutar(contador, actualizadorProgreso, null);
     }
 
+    // Sobrecarga de ejecutar que permite sincronizar el inicio con otras simulaciones usando un CountDownLatch
     public void ejecutar(ContadorEstadisticas contador,
                         Consumer<Double> actualizadorProgreso,
                         CountDownLatch inicioCompartido) {

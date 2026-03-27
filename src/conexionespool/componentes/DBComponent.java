@@ -92,10 +92,13 @@ public final class DBComponent implements DBConnection {
      * Compatibilidad con código existente.
      */
     @Deprecated
+    // Devuelve ubicación del recurso de queries, por compatibilidad con código
     public String getQueriesResource() {
         return queriesLocation;
     }
 
+
+    // Obtiene conexión del pool, asegura que el componente esté conectado
     private Connection acquire() throws DBException {
         ensureConnected();
         Connection c = poolManager.getConnection();
@@ -106,6 +109,7 @@ public final class DBComponent implements DBConnection {
         return c;
     }
 
+    // Verifica que el componente esté conectado antes de ejecutar operaciones
     private void ensureConnected() throws DBException {
         if (!connected) {
             throw new DBException(DBException.Category.CONNECTION, null,
@@ -113,12 +117,13 @@ public final class DBComponent implements DBConnection {
         }
     }
 
-    // Configura el timeout de las sentencias SQL según la configuración, con un valor por defecto razonable.
+    // Configura el timeout de las sentencias SQL según la configuración
     private int statementTimeoutSeconds() {
         int configured = Config.getInt("QUERY_TIMEOUT_SECONDS");
         return configured > 0 ? configured : DEFAULT_QUERY_TIMEOUT_SECONDS;
     }
 
+    // Implementación de DBConnection: connect, disconnect, isConnected
     @Override
     public synchronized void connect() {
         connected = true;
@@ -139,6 +144,7 @@ public final class DBComponent implements DBConnection {
     }
 
     @Override
+    // Devuelve el estado de conexión del componente
     public boolean isConnected() {
         return connected;
     }
@@ -250,17 +256,20 @@ public final class DBComponent implements DBConnection {
     /**
      * Transacción simple que trabaja con una conexión dedicada.
      */
+    // Implementa DBTransaction y maneja su propia conexión
     private static final class SimpleTransaction implements DBTransaction {
         private final Connection c;
         private final PoolManager poolManager;
         private boolean active = false;
 
+        // Constructor privado, se crea desde DBComponent.transaction
         private SimpleTransaction(Connection c, PoolManager poolManager) {
             this.c = c;
             this.poolManager = poolManager;
         }
 
         @Override
+        // Inicia la transacción desactivando el auto-commit de la conexión
         public void begin() throws DBException {
             try {
                 c.setAutoCommit(false);
@@ -271,6 +280,7 @@ public final class DBComponent implements DBConnection {
         }
 
         @Override
+        // Confirma la transacción y libera la conexión
         public void commit() throws DBException {
             try {
                 c.commit();
@@ -282,6 +292,7 @@ public final class DBComponent implements DBConnection {
         }
 
         @Override
+        // Revierte " "
         public void rollback() throws DBException {
             try {
                 c.rollback();
@@ -292,6 +303,7 @@ public final class DBComponent implements DBConnection {
             }
         }
 
+        // Finaliza la transacción, restablece el auto-commit y libera la conexión
         private void end() {
             try {
                 c.setAutoCommit(true);
@@ -307,6 +319,8 @@ public final class DBComponent implements DBConnection {
         }
 
         @Override
+        // Si la transacción sigue activa al cerrar,
+        // se revierte para evitar dejar la conexión en un estado inconsistente, luego libera la conexión
         public void close() throws DBException {
             if (active) {
                 rollback();
@@ -339,6 +353,7 @@ public final class DBComponent implements DBConnection {
         }
 
         @Override
+        // Ejecuta el batch de IDs acumulados, sumando total de filas afectadas, luego limpia el batch
         public synchronized DBQueryResult<int[]> executeBatch() throws DBException {
             Connection c = owner.acquire();
             try (Statement st = c.createStatement()) {
@@ -367,6 +382,7 @@ public final class DBComponent implements DBConnection {
         }
 
         @Override
+        // Ejecuta sentencias SQL contenidas en el archivo, contando el total de sentencias, filas afectadas y filas resultado.
         public DBQueryResult<?> queryFromFile(Path sqlFile) throws DBException {
             List<String> statements = loadQueriesFromFile(sqlFile);
             if (statements.isEmpty()) {
@@ -378,6 +394,8 @@ public final class DBComponent implements DBConnection {
             int updates = 0;
             int resultRows = 0;
 
+            //  Ejecuta cada sentencia, sumando el total de sentencias, filas afectadas por actualizaciones y
+            //  filas resultado de consultas, luego devuelve un resumen
             try (Statement st = c.createStatement()) {
                 st.setQueryTimeout(owner.statementTimeoutSeconds());
                 for (String sql : statements) {
@@ -406,6 +424,7 @@ public final class DBComponent implements DBConnection {
 
         // Carga sentencias SQL de un archivo, ignorando líneas vacías
         @Override
+        // Lee el contenido del archivo, lo divide en sentencias SQL usando ';' como separador
         public List<String> loadQueriesFromFile(Path sqlFile) throws DBException {
             if (sqlFile == null) {
                 throw new DBException(DBException.Category.CONFIG, null, "sqlFile no puede ser null");
@@ -419,6 +438,7 @@ public final class DBComponent implements DBConnection {
             }
         }
 
+        // Divide el contenido del archivo en sentencias SQL usando ';' como separador
         private List<String> splitSqlStatements(String content) {
             List<String> statements = new ArrayList<>();
             StringBuilder current = new StringBuilder();

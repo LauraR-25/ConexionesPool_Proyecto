@@ -9,6 +9,7 @@ import java.util.Properties;
 public class ConfiguracionEntorno {
     private final Properties propiedades = new Properties();
 
+    // Constructor que carga el archivo de configuración
     public ConfiguracionEntorno(String rutaArchivo) {
         try (FileInputStream fis = new FileInputStream(rutaArchivo)) {
             propiedades.load(fis);
@@ -22,10 +23,13 @@ public class ConfiguracionEntorno {
         return propiedades.getProperty(clave);
     }
 
+
+    // Obtener un valor de configuración como entero
     public int obtenerEntero(String clave) {
         return Integer.parseInt(propiedades.getProperty(clave));
     }
 
+    // Obtener un valor de configuración como largo
     public long obtenerLargo(String clave) {
         return Long.parseLong(propiedades.getProperty(clave));
     }

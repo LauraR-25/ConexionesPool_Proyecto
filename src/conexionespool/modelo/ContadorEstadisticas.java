@@ -54,6 +54,7 @@ public class ContadorEstadisticas implements Runnable {
     public double getPromedioReintentos() {
         return totalProcesadas == 0 ? 0 : totalReintentos.get() / (double) totalProcesadas;
     }
+    //  Calcula el porcentaje de éxito y fallo
     public double getPorcentajeExito() {
         return totalProcesadas == 0 ? 0 : exitosas.get() * 100.0 / totalProcesadas;
     }

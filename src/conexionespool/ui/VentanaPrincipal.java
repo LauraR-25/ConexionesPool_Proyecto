@@ -44,7 +44,7 @@ public class VentanaPrincipal extends Application {
     private ComboBox<DatabaseType> cmbDatabase;
     private Label estadoConexion;
 
-    // Connection fields
+    // Campos de conexión
     private TextField txtHost, txtPort, txtDb, txtUser;
     private PasswordField txtPass;
 

@@ -3,7 +3,7 @@ package conexionespool.componentes;
 import java.nio.file.Path;
 import java.util.List;
 
-//* Contrato para ejecutar consultas SQL desde archivos.*//
+// Interfaz para ejecutar consultas SQL desde archivos
 public interface DBQueryFile {
     DBQueryResult<?> queryFromFile(Path sqlFile) throws DBException;
 

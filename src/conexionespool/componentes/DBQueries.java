@@ -175,6 +175,7 @@ public final class DBQueries {
         return map;
     }
 
+    // Deshace las secuencias de escape comunes en JSON
     private static String unescapeJson(String value) {
         return value
                 .replace("\\\\n", "\n")
@@ -184,6 +185,7 @@ public final class DBQueries {
                 .replace("\\\\\\\\", "\\");
     }
 
+    // Parsea archivos YAML con formato plano key: value, ignorando comentarios y líneas vacías
     private static Map<String, String> parseYaml(String text) throws DBException {
         Map<String, String> map = new LinkedHashMap<>();
         String[] lines = text.split("\\R");
@@ -211,6 +213,7 @@ public final class DBQueries {
         return map;
     }
 
+    // "" TOML con formato plano key = "value", ignorando comentarios, secciones, líneas vacías
     private static Map<String, String> parseToml(String text) throws DBException {
         Map<String, String> map = new LinkedHashMap<>();
         String[] lines = text.split("\\R");

@@ -1,10 +1,10 @@
 package conexionespool.adaptadores;
 
-
 // Adaptador específico para H2, una base de datos en memoria o embebida
 public class H2Adapter implements IDBAdapter {
 
     @Override
+    // H2 es una base de datos en memoria o embebida, no requiere host ni puerto
     public DatabaseType type() {
         return DatabaseType.H2;
     }
@@ -15,6 +15,7 @@ public class H2Adapter implements IDBAdapter {
     }
 
     @Override
+    // Para H2, la URL se construye con el formato "jdbc:h2:./databases/<dbName>"
     public String buildJdbcUrl(String host, int port, String dbName) {
         // H2 en modo embebido, crea un archivo en ./databases/<dbName>
         return "jdbc:h2:./databases/" + dbName;

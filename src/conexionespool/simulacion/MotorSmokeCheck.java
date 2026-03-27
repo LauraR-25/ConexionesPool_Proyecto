@@ -13,7 +13,7 @@ public final class MotorSmokeCheck {
         checkMySql();
     }
 
-    // Cada método de check lee la config del entorno, aplica valores por defecto
+    // Cada metodo de check lee la config del entorno, aplica valores por defecto
     // y intenta conectar y ejecutar una consulta simple usando el DBComponentConnector.
     private static void checkPostgres() {
         ConfiguracionEntorno env = new ConfiguracionEntorno(".env");
@@ -43,7 +43,7 @@ public final class MotorSmokeCheck {
         runCheck("MYSQL", DatabaseType.MYSQL, host, port, db, user, pass);
     }
 
-    // El método runCheck intenta conectar usando el DBComponentConnector y ejecutar una consulta simple
+    // El metodo runCheck intenta conectar usando el DBComponentConnector y ejecutar una consulta simple
     private static void runCheck(String label,
                                  DatabaseType type,
                                  String host,
@@ -65,6 +65,7 @@ public final class MotorSmokeCheck {
             System.out.println(label + " FAIL - " + msg);
         }
     }
+
     private static String valueOrDefault(String value, String fallback) {
         if (value == null || value.isBlank()) {
             return fallback;

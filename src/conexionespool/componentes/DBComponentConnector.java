@@ -65,7 +65,7 @@ public final class DBComponentConnector {
         return new ConnectResult(type, new ConnectionConfig(adapter.driverClassName(), target.url(), target.user(), target.password()), queriesLocation, component);
     }
 
-    // Para H2, intentamos varias combinaciones de credenciales y URLs (incluyendo memoria) para asegurar que se pueda conectar, dado que H2 es muy flexible y a menudo se usa sin credenciales o con configuraciones mínimas.
+    // Para H2, intentamos varias combinaciones de credenciales y URLs (incluyendo memoria) para asegurar que se pueda conectar
     private ConnectionTarget resolveAndPing(DatabaseType type, String url, String user, String password, String dbName) throws DBException {
         if (type != DatabaseType.H2) {
             ping(url, user, password, type);

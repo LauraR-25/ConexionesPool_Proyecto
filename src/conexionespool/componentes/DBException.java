@@ -82,7 +82,7 @@ public class DBException extends Exception {
         return vendorCode;
     }
 
-    //
+    // Contexto adicional sobre dónde o cómo ocurrió el error
     public String getContext() {
         return context;
     }

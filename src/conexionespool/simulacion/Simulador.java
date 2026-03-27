@@ -33,15 +33,13 @@ public class Simulador {
         this.databaseType = databaseType == null ? DatabaseType.POSTGRES : databaseType;
     }
 
-    /**
-     * Constructor de compatibilidad: asume POSTGRES.
-     */
+    // Constructor de compatibilidad: asume POSTGRES
     public Simulador(int totalMuestras, int reintentosMaximos,
                      Supplier<DBQueryId> proveedorQueryId, Freno freno) {
         this(totalMuestras, reintentosMaximos, proveedorQueryId, freno, DatabaseType.POSTGRES);
     }
 
-    //  Getter para el número de muestras completadas
+    // Getter para el número de muestras completadas
     public int getCompletadas() {
         return completadas.get();
     }
@@ -100,6 +98,7 @@ public class Simulador {
         }
     }
 
+    //  Ejecuta una muestra individual con reintentos y registra el resultado en el contador
     private void ejecutarMuestra(int id, DBQueryId queryId, ContadorEstadisticas contador) {
         boolean exito = false;
         String mensajeError = "";
