@@ -9,6 +9,7 @@ public class PoolManager {
     private final String instanceKey;
     private final ConnectionPool pool;
 
+    // Construye un PoolManager con un pool interno para una configuración de conexión específica.
     private PoolManager(String driverClassName, String url, String user, String password) {
         this.instanceKey = driverClassName + "|" + url + "|" + user;
         try {
@@ -18,6 +19,7 @@ public class PoolManager {
         }
     }
 
+    // Obtiene o crea una instancia singleton de PoolManager por combinación driver/url/usuario.
     public static PoolManager getInstance(String driverClassName, String url, String user, String password) {
         Objects.requireNonNull(driverClassName, "driverClassName");
         Objects.requireNonNull(url, "url");
@@ -28,12 +30,14 @@ public class PoolManager {
         return INSTANCES.computeIfAbsent(key, _k -> new PoolManager(driverClassName, url, user, password));
     }
 
+    // Obtiene la primera instancia ya inicializada de PoolManager (falla si no se inicializó antes).
     public static synchronized PoolManager getInstance() {
         return INSTANCES.values().stream().findFirst().orElseGet(() -> {
             throw new IllegalStateException("PoolManager no ha sido inicializado. Usa getInstance(driver,url,user,password) primero.");
         });
     }
 
+    // Solicita una conexión al pool manejando interrupciones del hilo.
     public Connection getConnection() {
         try {
             return pool.getConnection();
@@ -43,10 +47,12 @@ public class PoolManager {
         }
     }
 
+    // Devuelve una conexión al pool para que sea reutilizada.
     public void releaseConnection(Connection connection) {
         pool.releaseConnection(connection);
     }
 
+    // Cierra el pool subyacente y elimina esta instancia del registro de singletons.
     public void close() throws Exception {
         if (pool instanceof Pool p) {
             p.closePool();

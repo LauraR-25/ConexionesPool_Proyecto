@@ -6,9 +6,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
+//* Clase para cargar y representar la configuración de la aplicación desde un archivo .properties. *//
 public class Configuracion {
     private final Properties props = new Properties();
 
+    // Carga la configuración desde el archivo especificado
     public Configuracion(String ruta) {
         try (FileInputStream fis = new FileInputStream(ruta)) {
             props.load(fis);
@@ -17,6 +19,7 @@ public class Configuracion {
         }
     }
 
+    // Métodos para acceder a las propiedades de configuración
     public String getHost() { return props.getProperty("db.host"); }
     public int getPuerto() { return Integer.parseInt(props.getProperty("db.port")); }
     public String getBase() { return props.getProperty("db.name"); }

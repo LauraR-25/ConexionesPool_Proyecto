@@ -12,6 +12,7 @@ public class GraficoTorta extends StackPane {
     private final PieChart pieChart;
     private final Label lblPorcentaje;
 
+    // Gráfico de torta para mostrar el porcentaje de transacciones exitosas vs fallidas
     public GraficoTorta(String titulo) {
         pieChart = new PieChart();
         pieChart.setTitle(titulo);
@@ -42,13 +43,15 @@ public class GraficoTorta extends StackPane {
             return;
         }
 
+        // Agrega los datos al gráfico de torta
         PieChart.Data sliceExito = new PieChart.Data("Éxito", exitosas);
         PieChart.Data sliceFallo = new PieChart.Data("Fallo", fallidas);
         pieChart.getData().addAll(sliceExito, sliceFallo);
-
+        // Calcula el porcentaje de éxito y actualiza la etiqueta
         double pctExito = (exitosas * 100.0) / total;
         lblPorcentaje.setText(String.format("%.1f%%", pctExito));
 
+        // Aplica estilos personalizados a las porciones del gráfico
         sliceExito.nodeProperty().addListener((obs, oldNode, newNode) -> {
             if (newNode != null) newNode.setStyle("-fx-pie-color: #4CAF50;");
         });
@@ -57,6 +60,7 @@ public class GraficoTorta extends StackPane {
         });
     }
 
+    // Limpia el gráfico y restablece el porcentaje a 0%
     public void limpiar() {
         pieChart.getData().clear();
         PieChart.Data dummy = new PieChart.Data("", 1);

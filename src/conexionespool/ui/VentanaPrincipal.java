@@ -107,6 +107,7 @@ public class VentanaPrincipal extends Application {
         btnSimular.setOnAction(_ -> ejecutarSimulacion());
     }
 
+    // Crea el panel de configuración con campos para host, puerto, base de datos, usuario, contraseña,etc
     private VBox crearPanelConfiguracion(String host, String port, String db, String user, String pass) {
         VBox leftCol = new VBox(12);
         leftCol.setMinWidth(320);
@@ -227,6 +228,7 @@ public class VentanaPrincipal extends Application {
         return leftCol;
     }
 
+    // Crea el panel de métricas con tarjetas para Raw y Pool, gráficas de torta y un resumen final.
     private VBox crearPanelMetricas() {
         VBox rightCol = new VBox(20);
         HBox.setHgrow(rightCol, Priority.ALWAYS);
@@ -271,6 +273,7 @@ public class VentanaPrincipal extends Application {
         return rightCol;
     }
 
+    // Crea una tarjeta de KPI con título, estado, barra de progreso y color personalizado.
     private VBox crearTarjetaKPI(String titulo, Label estado, ProgressBar pb, String color) {
         VBox card = new VBox(8);
         card.setPadding(new Insets(15));
@@ -329,6 +332,7 @@ public class VentanaPrincipal extends Application {
         scene.getStylesheets().add("data:text/css," + style.replace("\n", ""));
     }
 
+    // Método para conectar a la base de datos usando los valores ingresados y el DBComponentConnector
     private void conectarDB(String host, String portTxt, String db, String user, String pass) {
         DatabaseType tipo = cmbDatabase.getValue();
 

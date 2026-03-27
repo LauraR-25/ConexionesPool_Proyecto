@@ -1,5 +1,6 @@
 package conexionespool.util;
 
+// Verificar la presencia de drivers JDBC en el classpath
 public final class DriverCheck {
     private DriverCheck() {}
 

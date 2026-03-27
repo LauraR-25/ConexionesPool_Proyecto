@@ -8,13 +8,11 @@ import conexionespool.adaptadores.DatabaseType;
 import conexionespool.adaptadores.IDBAdapter;
 import conexionespool.adaptadores.PostgreSQLAdapter;
 import conexionespool.adaptadores.MySQLAdapter;
-import conexionespool.adaptadores.H2Adapter;  // importar el nuevo adaptador
+import conexionespool.adaptadores.H2Adapter;
 
 public final class DBComponentConnector {
 
-    // Ya no usamos una query que dependa de tablas de negocio.
-    // private static final DBQueryId DEFAULT_PING_QUERY = new DBQueryId("usuario.selectOne");
-
+    // El constructor es privado porque esta clase solo expone métodos estáticos.
     public ConnectResult connect(DatabaseType type,
                                  String host,
                                  int port,
@@ -67,6 +65,7 @@ public final class DBComponentConnector {
         return new ConnectResult(type, new ConnectionConfig(adapter.driverClassName(), target.url(), target.user(), target.password()), queriesLocation, component);
     }
 
+    // Para H2, intentamos varias combinaciones de credenciales y URLs (incluyendo memoria) para asegurar que se pueda conectar, dado que H2 es muy flexible y a menudo se usa sin credenciales o con configuraciones mínimas.
     private ConnectionTarget resolveAndPing(DatabaseType type, String url, String user, String password, String dbName) throws DBException {
         if (type != DatabaseType.H2) {
             ping(url, user, password, type);
@@ -89,6 +88,7 @@ public final class DBComponentConnector {
             }
         }
 
+        //  Si no funcionó con la URL normal, intentamos con una base de datos en memoria, que es común para H2 y no requiere configuración previa.
         String safeDbName = (dbName == null || dbName.isBlank()) ? "simulacion" : dbName.trim();
         String memoryUrl = "jdbc:h2:mem:" + safeDbName + ";DB_CLOSE_DELAY=-1";
         for (Credentials candidate : candidates) {
@@ -116,6 +116,7 @@ public final class DBComponentConnector {
         }
     }
 
+    // Clases auxiliares para manejar combinaciones de credenciales y resultados de conexión de forma más clara.
     private record Credentials(String user, String password) {}
     private record ConnectionTarget(String url, String user, String password) {}
 
@@ -139,6 +140,7 @@ public final class DBComponentConnector {
         }
     }
 
+    // Convierte una ruta de recurso relativa a una ubicación de classpath
     private String toClasspathLocation(String adapterResource) {
         if (adapterResource == null || adapterResource.isBlank()) {
             throw new IllegalArgumentException("queriesResource no puede ser null/vacío");
@@ -147,6 +149,7 @@ public final class DBComponentConnector {
         return "classpath:" + normalized;
     }
 
+    // El resultado de la conexión incluye toda la información relevante para crear el componente y usarlo
     public record ConnectResult(
             DatabaseType type,
             ConnectionConfig config,

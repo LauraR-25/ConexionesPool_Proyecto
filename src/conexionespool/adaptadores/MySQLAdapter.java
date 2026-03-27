@@ -1,5 +1,6 @@
 package conexionespool.adaptadores;
 
+// Implementación de IDBAdapter para MySQL
 public class MySQLAdapter implements IDBAdapter {
 
     @Override

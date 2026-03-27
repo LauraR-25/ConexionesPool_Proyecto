@@ -2,6 +2,7 @@ package conexionespool.util;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+// Control para pausar y reanudar operaciones
 public class Freno {
     private final AtomicBoolean activo = new AtomicBoolean(false);
 

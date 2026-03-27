@@ -1,5 +1,6 @@
 package conexionespool.componentes;
 
+// Interfaz que representa una transacción de base de datos
 public interface DBTransaction extends AutoCloseable {
     void begin() throws DBException;
 

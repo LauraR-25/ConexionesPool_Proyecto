@@ -23,6 +23,7 @@ public class SimulationLogger {
         }
     }
 
+    // Método para escribir una línea en el log
     public static void logLinea(String linea) {
         lock.lock();
         try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(LOG_FILE, true)))) {
@@ -34,6 +35,7 @@ public class SimulationLogger {
         }
     }
 
+    // Método para limpiar el log (sobrescribe el archivo)
     public static void limpiarLog() {
         lock.lock();
         try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(LOG_FILE, false)))) {

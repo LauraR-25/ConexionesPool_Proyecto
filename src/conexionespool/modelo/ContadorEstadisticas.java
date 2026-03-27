@@ -5,6 +5,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+//Clase para contar estadísticas de resultados de consultas, con soporte para concurrencia
 public class ContadorEstadisticas implements Runnable {
     private final BlockingQueue<Resultado> cola;
     private volatile boolean activo = true;
@@ -13,6 +14,7 @@ public class ContadorEstadisticas implements Runnable {
     private final AtomicLong totalReintentos = new AtomicLong(0);
     private int totalProcesadas = 0;
 
+    // El constructor inicializa la cola de resultados
     public ContadorEstadisticas() {
         this.cola = new LinkedBlockingQueue<>();
     }
@@ -21,6 +23,7 @@ public class ContadorEstadisticas implements Runnable {
         cola.offer(resultado);
     }
 
+    //El método run() procesa los resultados de la cola hasta que se detiene y la cola está vacía
     @Override
     public void run() {
         while (activo || !cola.isEmpty()) {
@@ -44,6 +47,7 @@ public class ContadorEstadisticas implements Runnable {
         }
     }
 
+    // Detiene el contador para que deje de procesar nuevos resultados, pero seguirá procesando los que ya estén en la cola
     public void detener() { activo = false; }
     public int getExitosas() { return exitosas.get(); }
     public int getFallidas() { return fallidas.get(); }

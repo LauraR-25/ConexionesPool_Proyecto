@@ -1,5 +1,7 @@
 package conexionespool.adaptadores;
 
+
+// Adaptador específico para H2, una base de datos en memoria o embebida
 public class H2Adapter implements IDBAdapter {
 
     @Override

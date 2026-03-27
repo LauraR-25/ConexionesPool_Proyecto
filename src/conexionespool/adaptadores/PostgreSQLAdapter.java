@@ -1,5 +1,6 @@
 package conexionespool.adaptadores;
 
+// Implementación del adaptador para PostgreSQL
 public class PostgreSQLAdapter implements IDBAdapter {
 
     @Override

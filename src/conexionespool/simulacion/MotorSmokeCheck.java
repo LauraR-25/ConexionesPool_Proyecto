@@ -5,6 +5,7 @@ import conexionespool.componentes.DBComponentConnector;
 import conexionespool.componentes.DBQueryId;
 import conexionespool.util.ConfiguracionEntorno;
 
+//Prueba para verificar la conectividad y ejecución básica en los motores
 public final class MotorSmokeCheck {
     public static void main(String[] args) {
         checkPostgres();
@@ -12,6 +13,8 @@ public final class MotorSmokeCheck {
         checkMySql();
     }
 
+    // Cada método de check lee la config del entorno, aplica valores por defecto
+    // y intenta conectar y ejecutar una consulta simple usando el DBComponentConnector.
     private static void checkPostgres() {
         ConfiguracionEntorno env = new ConfiguracionEntorno(".env");
         String host = valueOrDefault(env.obtener("DB_HOST"), "localhost");
@@ -40,6 +43,7 @@ public final class MotorSmokeCheck {
         runCheck("MYSQL", DatabaseType.MYSQL, host, port, db, user, pass);
     }
 
+    // El método runCheck intenta conectar usando el DBComponentConnector y ejecutar una consulta simple
     private static void runCheck(String label,
                                  DatabaseType type,
                                  String host,
@@ -61,7 +65,6 @@ public final class MotorSmokeCheck {
             System.out.println(label + " FAIL - " + msg);
         }
     }
-
     private static String valueOrDefault(String value, String fallback) {
         if (value == null || value.isBlank()) {
             return fallback;

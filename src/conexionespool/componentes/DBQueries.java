@@ -57,6 +57,8 @@ public final class DBQueries {
                         " (usa classpath:/..., file:/... o ruta de archivo)");
     }
 
+    // Carga desde classpath, detectando formato por extensión
+    // Si no se encuentra el recurso, lanza DBException con mensaje claro
     public static DBQueries loadFromClasspath(String resourcePath) throws DBException {
         if (resourcePath == null || resourcePath.isBlank()) {
             throw new DBException("resourcePath no puede ser null/vacío");
@@ -77,6 +79,7 @@ public final class DBQueries {
         }
     }
 
+    // Carga desde sistema de archivos, detectando formato por extensión
     public static DBQueries loadFromFile(Path filePath) throws DBException {
         if (filePath == null) {
             throw new DBException("filePath no puede ser null");
@@ -92,6 +95,7 @@ public final class DBQueries {
         }
     }
 
+    // Obtiene la query SQL asociada al ID dado
     public String sql(DBQueryId id) throws DBException {
         Objects.requireNonNull(id, "id");
         String sql = queries.get(id.value());
@@ -106,6 +110,8 @@ public final class DBQueries {
         return queries.keySet();
     }
 
+    // Detecta el formato del archivo por su extensión y delega al parser correspondiente
+    // Si la extensión no es reconocida, lanza DBException con mensaje claro
     private static Map<String, String> parseByExtension(String normalizedResourcePath, String text) throws DBException {
         String path = normalizedResourcePath.toLowerCase();
         if (path.endsWith(".properties")) {
@@ -126,6 +132,7 @@ public final class DBQueries {
                         " (usa .properties, .json, .yaml/.yml o .toml)");
     }
 
+    // Parsea archivos .properties usando java.util.Properties
     private static Map<String, String> parseProperties(String text) throws DBException {
         try {
             Properties p = new Properties();
@@ -144,6 +151,7 @@ public final class DBQueries {
         }
     }
 
+    // Parsea archivos JSON con formato plano { "id": "sql", ... } usando regex simple
     private static Map<String, String> parseJson(String text) throws DBException {
         String src = text.trim();
         if (!src.startsWith("{") || !src.endsWith("}")) {
@@ -233,6 +241,7 @@ public final class DBQueries {
         return map;
     }
 
+    // Elimina comillas simples o dobles que envuelven el valor, si existen, y recorta espacios
     private static String stripWrappingQuotes(String value) {
         Objects.requireNonNull(value, "value");
         if ((value.startsWith("\"") && value.endsWith("\"")) ||

@@ -1,5 +1,6 @@
 package conexionespool.componentes;
 
+// Interfaz para ejecutar un batch de consultas SQL
 public interface DBQueryBatch {
 
     void clearBatch() throws DBException;

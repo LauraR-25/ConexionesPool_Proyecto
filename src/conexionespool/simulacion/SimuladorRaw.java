@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+// SimuladorRaw ejecuta consultas SQL directamente
 public class SimuladorRaw {
     private static final int DEFAULT_QUERY_TIMEOUT_SECONDS = 10;
     private final int totalMuestras;
@@ -22,6 +23,7 @@ public class SimuladorRaw {
     private final Semaphore slotsConexion;
     private final long timeoutSlotMs;
 
+    // El constructor recibe la configuración necesaria para ejecutar las consultas
     public SimuladorRaw(int totalMuestras, int reintentosMaximos, Supplier<String> proveedorQuery,
                         Freno freno, String url, String user, String pass) {
         this.totalMuestras = totalMuestras;
@@ -42,6 +44,7 @@ public class SimuladorRaw {
         preloadDriverForUrl(url);
     }
 
+    // Pre-carga el driver JDBC basado en el prefijo del URL
     private void preloadDriverForUrl(String jdbcUrl) {
         String driver = null;
         if (jdbcUrl != null) {
@@ -68,6 +71,7 @@ public class SimuladorRaw {
         return completadas.get();
     }
 
+    // Método principal para ejecutar la simulación
     public void ejecutar(ContadorEstadisticas contador, Consumer<Double> actualizadorProgreso) {
         ejecutar(contador, actualizadorProgreso, null);
     }
@@ -120,11 +124,14 @@ public class SimuladorRaw {
         }
     }
 
+
+    // Obtiene el timeout para las consultas desde la configuración
     private int statementTimeoutSeconds() {
         int configured = Config.getInt("QUERY_TIMEOUT_SECONDS");
         return configured > 0 ? configured : DEFAULT_QUERY_TIMEOUT_SECONDS;
     }
 
+    // Ejecuta una muestra individual, manejando reintentos, errores, y registrando el resultado en el contador
     private void ejecutarMuestra(int id, String query, ContadorEstadisticas contador) {
         boolean exito = false;
         String mensajeError = "";

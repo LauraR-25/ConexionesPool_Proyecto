@@ -16,6 +16,8 @@ import java.util.Objects;
 import conexionespool.pool.Config;
 import conexionespool.pool.PoolManager;
 
+
+// Componente de acceso a base de datos con pool de conexiones y manejo de queries predefinidas. </summary>
 public final class DBComponent implements DBConnection {
     private static final int DEFAULT_QUERY_TIMEOUT_SECONDS = 10;
     private final PoolManager poolManager;
@@ -111,6 +113,7 @@ public final class DBComponent implements DBConnection {
         }
     }
 
+    // Configura el timeout de las sentencias SQL según la configuración, con un valor por defecto razonable.
     private int statementTimeoutSeconds() {
         int configured = Config.getInt("QUERY_TIMEOUT_SECONDS");
         return configured > 0 ? configured : DEFAULT_QUERY_TIMEOUT_SECONDS;
@@ -140,6 +143,7 @@ public final class DBComponent implements DBConnection {
         return connected;
     }
 
+    // Ejecuta una query predefinida por ID y devuelve los resultados como una lista de filas
     public DBQueryResult<List<Object[]>> query(DBQueryId id) throws DBException {
         String sql = queries.sql(id);
         Connection c = acquire();
@@ -162,6 +166,7 @@ public final class DBComponent implements DBConnection {
         }
     }
 
+    // " " y mapea cada fila usando el RowMapper proporcionado.
     public <R> DBQueryResult<List<R>> query(DBQueryId id, RowMapper<R> mapper) throws DBException {
         Objects.requireNonNull(mapper, "mapper");
         String sql = queries.sql(id);
@@ -183,6 +188,7 @@ public final class DBComponent implements DBConnection {
         }
     }
 
+    // Ejecuta una query de actualización (INSERT/UPDATE/DELETE) predefinida por ID y devuelve el número de filas afectadas.
     public DBQueryResult<Void> update(DBQueryId id) throws DBException {
         String sql = queries.sql(id);
         Connection c = acquire();
@@ -197,6 +203,7 @@ public final class DBComponent implements DBConnection {
         }
     }
 
+    // Crea una transacción desacoplada que maneja su propia conexión dedicada
     public DBTransaction transaction() throws DBException {
         return new SimpleTransaction(acquire(), poolManager);
     }
@@ -309,6 +316,7 @@ public final class DBComponent implements DBConnection {
         }
     }
 
+    // Batch simple que solo acepta IDs predefinidos y ejecuta usando Statement.addBatch/executeBatch.
     private static final class SimpleBatch implements DBQueryBatch {
         private final DBComponent owner;
         private final List<DBQueryId> pending = new ArrayList<>();
@@ -350,6 +358,7 @@ public final class DBComponent implements DBConnection {
         }
     }
 
+    //  Ejecutor simple de archivos .sql que carga sentencias
     private static final class SimpleQueryFile implements DBQueryFile {
         private final DBComponent owner;
 
@@ -395,6 +404,7 @@ public final class DBComponent implements DBConnection {
             }
         }
 
+        // Carga sentencias SQL de un archivo, ignorando líneas vacías
         @Override
         public List<String> loadQueriesFromFile(Path sqlFile) throws DBException {
             if (sqlFile == null) {
@@ -441,6 +451,7 @@ public final class DBComponent implements DBConnection {
         }
     }
 
+    // Resumen de ejecución de un archivo SQL
     public record QueryFileSummary(int statements, int affectedRows, int resultRows) {
         @Override
         public String toString() {

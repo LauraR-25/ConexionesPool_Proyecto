@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+// Simulador que ejecuta consultas SQL usando componentes de base de datos registrados
 public class Simulador {
     private final int totalMuestras;
     private final int reintentosMaximos;
@@ -40,6 +41,7 @@ public class Simulador {
         this(totalMuestras, reintentosMaximos, proveedorQueryId, freno, DatabaseType.POSTGRES);
     }
 
+    //  Getter para el número de muestras completadas
     public int getCompletadas() {
         return completadas.get();
     }
@@ -48,6 +50,7 @@ public class Simulador {
         ejecutarConPool(contador, actualizadorProgreso, null);
     }
 
+    // Ejecuta
     public void ejecutarConPool(ContadorEstadisticas contador,
                                 Consumer<Double> actualizadorProgreso,
                                 CountDownLatch inicioCompartido) {
